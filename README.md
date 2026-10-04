@@ -8,27 +8,14 @@ events mean for an application.
 
 ## Install
 
-Install from GitHub now:
-
-```sh
-npm install github:imxade/inject
-```
-
-For a reproducible application dependency, pin a commit:
-
-```sh
-npm install github:imxade/inject#<commit-sha>
-```
-
-After the first npm registry release, the preferred install will be:
+Install from npm:
 
 ```sh
 npm install @imxade/inject
 ```
 
-GitHub installs run the package build automatically before installation, so
-consumers receive the compiled `dist/` entry points even though build output is
-not committed to the repository.
+The published package includes the compiled `dist/` entry points, so consumers
+can install it directly from the public npm registry.
 
 ## Quick usage
 
