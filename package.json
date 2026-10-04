@@ -51,7 +51,7 @@
     "node": ">=20"
   },
   "dependencies": {
-    "koffi": "2.16.2"
+    "koffi": "3.3.2"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
