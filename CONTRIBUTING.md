@@ -1,5 +1,20 @@
 # Contributing
 
+## Architecture rule
+
+Inject is a native mechanism layer, not an input-policy layer.
+
+Contributions may expose operating-system input facilities, native device
+creation, raw event submission, FFI structures, capability configuration, and
+resource lifecycle.
+
+Do not add application semantics such as key-name maps, text conversion,
+shortcuts, gesture recognition, sensitivity/acceleration, scroll policy,
+controller layouts, protocol messages, validation, or throttling.
+
+The consuming application must retain complete control over which native codes,
+flags, coordinates, reports, and event sequences are submitted.
+
 ## Pull requests
 
 Keep each pull request focused on one change. PR titles must use Conventional
@@ -12,15 +27,6 @@ type(scope): description
 Allowed types are `feat`, `fix`, `docs`, `style`, `refactor`, `perf`,
 `test`, `build`, `ci`, `chore`, and `revert`.
 
-Examples:
-
-```text
-feat(linux): add absolute pointer support
-fix(windows): release synthetic pointer device
-chore(deps): bump koffi
-ci(deps): bump actions/checkout
-```
-
 Before opening a PR, run:
 
 ```sh
@@ -31,12 +37,5 @@ npm test
 npm run build
 ```
 
-CI runs the same quality checks on Linux, macOS, and Windows. Dependency and
-GitHub Actions updates opened by Dependabot use Conventional Commit prefixes so
-they are subject to the same title and quality gates as contributor PRs.
-
-## Scope
-
-Keep this package focused on native input injection. Rein-specific networking,
-WebRTC signalling, UI gesture handling, and server orchestration belong in Rein,
-not in this library.
+CI runs the same quality checks on Linux, macOS, and Windows. Dependabot PRs
+must pass the same checks and title gate as contributor PRs.

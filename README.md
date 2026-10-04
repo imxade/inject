@@ -1,111 +1,187 @@
 # Inject
 
-A starting point for a standalone, cross-platform native input injection library
-for Node.js. The code is extracted from an existing cross-platform input-driver
-layer and is intended to evolve into a reusable alternative to app-coupled
-automation/input libraries.
+Inject is a thin native-input systems layer for Node.js.
 
-This bootstrap is an initial isolation of the native injection concern, not a
-stable release.
+Its job is to expose the mechanisms required to create native input devices and
+submit native input events. It intentionally does **not** decide what those
+events mean for an application.
 
-## Current scope
+## Design boundary
 
-The library currently isolates:
+The library owns:
 
-- relative and absolute mouse movement
-- left/right/middle mouse buttons
-- vertical and horizontal scrolling
-- keyboard key injection and key combinations
-- text injection
-- multi-touch / touchpad injection
-- shared key maps and motion helpers
-- Linux, macOS, and Windows native backends using Koffi
+- loading and calling native input APIs
+- native structure definitions and FFI bindings
+- virtual-device creation and destruction
+- capability registration
+- raw event submission
+- native resource lifecycle
+- platform selection and platform-specific entry points
 
-It deliberately does **not** copy Rein's WebRTC signalling, input-message
-protocol, sanitization/throttling, UI gestures, or server lifecycle.
+The consuming application owns:
 
-Gamepad code is also left out of this first extraction. Rein's current Windows
-gamepad implementation has an application-specific ViGEm binary lookup, so it
-should be isolated behind a library-owned dependency strategy before being
-added here.
+- key-name mappings
+- keyboard layouts
+- text-to-key conversion
+- shortcuts and key combinations
+- pointer sensitivity or acceleration
+- scroll direction and scaling
+- gesture recognition
+- touch interpretation
+- controller button mappings
+- application protocols, validation, throttling, and state
 
-## Architecture
+There are no built-in key maps, gesture policies, controller layouts, screen
+defaults, or input-message formats.
+
+The model is deliberately closer to Node.js core bindings: Inject exposes a
+small, predictable primitive over an operating-system facility, while the
+caller decides how to compose those primitives.
+
+## API layout
 
 ```text
 src/
-├── index.ts       # platform-neutral exports
-├── factory.ts     # lazy platform selection
-├── types.ts       # public injector contract
-├── constants.ts   # input-only defaults/constants
-├── keyMap.ts      # shared platform key maps
-├── utils.ts       # pure motion/character helpers
-├── linux/         # uinput backend
-├── mac/           # CoreGraphics backend
-└── windows/       # SendInput + Synthetic Pointer backend
+├── index.ts       # platform-neutral loader/types only
+├── loader.ts      # lazy platform loading
+├── linux/         # generic uinput device/config/event primitives
+├── mac/           # CoreGraphics event-posting primitives
+└── windows/       # SendInput, synthetic pointer, and ViGEm primitives
 ```
 
-The root entry point does not statically import all native backends. Platform
-modules are loaded lazily by `createInputInjector()`, which avoids evaluating
-Windows/macOS/Linux FFI bindings on the wrong host.
+Platform modules are loaded lazily so importing the root package does not
+evaluate native bindings for another operating system.
 
-## Usage
+## Linux: uinput
+
+The Linux API exposes a generic `UinputDevice`. The library does not create a
+predefined mouse, keyboard, touch device, or controller. The client registers
+the capabilities and event codes it needs.
 
 ```ts
-import { createInputInjector } from "@imxade/inject"
+import {
+  EV_KEY,
+  EV_SYN,
+  UinputDevice,
+} from "@imxade/inject/linux"
 
-const input = await createInputInjector({
-  config: {
-    sensitivity: 1,
-    acceleration: true,
-    invertScroll: false,
-    screenWidth: 1920,
-    screenHeight: 1080,
+const device = new UinputDevice({
+  name: "client-controlled-device",
+  identity: {
+    bustype: clientBusType,
+    vendor: clientVendor,
+    product: clientProduct,
+    version: clientVersion,
   },
 })
 
-input.injectMouseMove(20, 10)
-input.injectMouseButton("left", true)
-input.injectMouseButton("left", false)
-input.injectText("hello")
-input.injectKey("enter")
+device
+  .setEventBit(EV_KEY)
+  .setEventBit(EV_SYN)
+  .setKeyBit(clientKeyCode)
+  .create()
+
+device.emit(EV_KEY, clientKeyCode, clientKeyState)
+device.sync()
+
+device.destroy()
 ```
 
-Consumers that explicitly need a platform backend can use the subpath entry
-points such as `@imxade/inject/linux`, `@imxade/inject/mac`, or
-`@imxade/inject/windows`.
+The numeric key code and state come from the consumer. Inject only configures
+and writes to `uinput`.
 
-## Platform notes
+## macOS: CoreGraphics
 
-**Linux:** uses `/dev/uinput`; the process must have permission to open it.
-Production packaging should document a udev/group setup rather than requiring
-root.
+The macOS entry point exposes raw CoreGraphics posting primitives.
 
-**macOS:** uses CoreGraphics. The host application normally needs Accessibility
-permission for injected keyboard/mouse events.
+```ts
+import {
+  kCGHIDEventTap,
+  postKeyEvent,
+} from "@imxade/inject/mac"
 
-**Windows:** uses `SendInput` for mouse/keyboard and the Synthetic Pointer API
-for touchpad injection.
+postKeyEvent(kCGHIDEventTap, clientKeyCode, true)
+postKeyEvent(kCGHIDEventTap, clientKeyCode, false)
+```
 
-## Contributor direction
+The caller owns the key-code mapping and event sequence.
 
-The next useful steps are:
+## Windows: SendInput and synthetic pointers
 
-1. Add CI on Linux, macOS, and Windows and run build/tests on every platform.
-2. Add deterministic tests around platform guards without constructing real
-   native devices in unit tests.
-3. Audit native lifecycle/cleanup and error propagation, especially synthetic
-   touch-device destruction and uinput ioctl failures.
-4. Define a stable public error model instead of platform modules logging
-   directly to `console`.
-5. Decide whether CommonJS output is required; this bootstrap intentionally
-   starts ESM-only to keep the build simple.
-6. Add gamepad support only after Windows ViGEm loading is made independent of
-   Rein's bundled-resource paths.
-7. Add release/versioning automation only after the public API and package name
-   are agreed.
+```ts
+import {
+  INPUT_KEYBOARD,
+  sendInput,
+} from "@imxade/inject/windows"
 
-## Provenance
+sendInput([
+  {
+    type: INPUT_KEYBOARD,
+    u: {
+      ki: {
+        wVk: clientVirtualKey,
+        wScan: clientScanCode,
+        dwFlags: clientFlags,
+      },
+    },
+  },
+])
+```
 
-See [NOTICE](./NOTICE). The extracted code is kept under Apache-2.0. The goal
-of this repository is to provide a clean home for the native input layer so
-applications can consume it as a normal library.
+Synthetic pointer creation and frame injection are exposed separately. Inject
+does not track contacts or turn touch data into gestures.
+
+## Windows: ViGEm
+
+ViGEm is exposed as a native transport rather than a controller policy. The
+consumer supplies the DLL path and the raw XUSB report values.
+
+```ts
+import { ViGEmClient } from "@imxade/inject/windows"
+
+const vigem = new ViGEmClient(clientViGEmDllPath)
+const target = vigem.createXbox360Target()
+
+target.update({
+  wButtons: clientButtonBits,
+  bLeftTrigger: clientLeftTrigger,
+  bRightTrigger: clientRightTrigger,
+  sThumbLX: clientLeftX,
+  sThumbLY: clientLeftY,
+  sThumbRX: clientRightX,
+  sThumbRY: clientRightY,
+})
+
+target.destroy()
+vigem.destroy()
+```
+
+No button-name map or bundled binary lookup is provided by the library.
+
+## What should not be added here
+
+Features such as `injectText("hello")`, `injectCombo(["ctrl", "c"])`, a
+predefined `"left"` mouse action, gesture-to-scroll conversion, pointer
+acceleration, or an application-specific input message schema should live in a
+consumer package or application.
+
+A useful test for a contribution is: **does this expose a native input mechanism,
+or does it decide how an application should interpret input?** Only the former
+belongs here.
+
+## Development
+
+```sh
+npm install
+npm run check
+npm run typecheck
+npm test
+npm run build
+```
+
+CI runs these checks on Linux, macOS, and Windows. CodeQL, Dependabot, and
+CodeRabbit are configured at repository level.
+
+## License
+
+Apache-2.0. See [LICENSE](./LICENSE) and [NOTICE](./NOTICE).

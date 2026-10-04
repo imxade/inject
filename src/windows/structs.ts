@@ -1,19 +1,51 @@
 import koffi from "koffi"
 
-// ---- Struct Definitions (safe to define at module level) ----
-const POINT = koffi.struct("POINT", {
+export interface WindowsPoint {
+	x: number
+	y: number
+}
+
+export interface WindowsRect {
+	left: number
+	top: number
+	right: number
+	bottom: number
+}
+
+export interface WindowsMouseInput {
+	dx: number
+	dy: number
+	mouseData: number
+	dwFlags: number
+	time?: number
+	dwExtraInfo?: number
+}
+
+export interface WindowsKeyboardInput {
+	wVk: number
+	wScan: number
+	dwFlags: number
+	time?: number
+	dwExtraInfo?: number
+}
+
+export type WindowsInput =
+	| { type: number; u: { mi: WindowsMouseInput } }
+	| { type: number; u: { ki: WindowsKeyboardInput } }
+
+const POINT = koffi.struct("InjectPOINT", {
 	x: "long",
 	y: "long",
 })
 
-const RECT = koffi.struct("RECT", {
+const RECT = koffi.struct("InjectRECT", {
 	left: "long",
 	top: "long",
 	right: "long",
 	bottom: "long",
 })
 
-const POINTER_INFO = koffi.struct("POINTER_INFO", {
+const POINTER_INFO = koffi.struct("InjectPOINTER_INFO", {
 	pointerType: "uint32",
 	pointerId: "uint32",
 	frameId: "uint32",
@@ -32,7 +64,7 @@ const POINTER_INFO = koffi.struct("POINTER_INFO", {
 	ButtonChangeType: "int32",
 })
 
-const POINTER_TOUCH_INFO = koffi.struct("POINTER_TOUCH_INFO", {
+const POINTER_TOUCH_INFO = koffi.struct("InjectPOINTER_TOUCH_INFO", {
 	pointerInfo: POINTER_INFO,
 	touchFlags: "uint32",
 	touchMask: "uint32",
@@ -42,12 +74,12 @@ const POINTER_TOUCH_INFO = koffi.struct("POINTER_TOUCH_INFO", {
 	pressure: "uint32",
 })
 
-export const _POINTER_TYPE_INFO = koffi.struct("POINTER_TYPE_INFO", {
+export const POINTER_TYPE_INFO = koffi.struct("InjectPOINTER_TYPE_INFO", {
 	type: "uint32",
 	touchInfo: POINTER_TOUCH_INFO,
 })
 
-const MOUSEINPUT = koffi.struct("MOUSEINPUT", {
+const MOUSEINPUT = koffi.struct("InjectMOUSEINPUT", {
 	dx: "long",
 	dy: "long",
 	mouseData: "uint32",
@@ -56,7 +88,7 @@ const MOUSEINPUT = koffi.struct("MOUSEINPUT", {
 	dwExtraInfo: "uintptr",
 })
 
-const KEYBDINPUT = koffi.struct("KEYBDINPUT", {
+const KEYBDINPUT = koffi.struct("InjectKEYBDINPUT", {
 	wVk: "uint16",
 	wScan: "uint16",
 	dwFlags: "uint32",
@@ -64,12 +96,12 @@ const KEYBDINPUT = koffi.struct("KEYBDINPUT", {
 	dwExtraInfo: "uintptr",
 })
 
-const INPUT_UNION = koffi.union("INPUT_UNION", {
+const INPUT_UNION = koffi.union("InjectINPUT_UNION", {
 	mi: MOUSEINPUT,
 	ki: KEYBDINPUT,
 })
 
-const INPUT = koffi.struct("INPUT", {
+const INPUT = koffi.struct("InjectINPUT", {
 	type: "uint32",
 	__pad: "uint32",
 	u: INPUT_UNION,
@@ -77,78 +109,110 @@ const INPUT = koffi.struct("INPUT", {
 
 type KoffiLib = ReturnType<typeof koffi.load>
 type KoffiFunc = ReturnType<KoffiLib["func"]>
-let _lib: KoffiLib | null = null
-let _CreateSyntheticPointerDevice: KoffiFunc | null = null
-let _InjectPointerInput: KoffiFunc | null = null
-let _SendInput: KoffiFunc | null = null
 
-function ensureLib() {
-	if (!_lib) {
-		_lib = koffi.load("user32.dll")
+let library: KoffiLib | null = null
+let sendInputNative: KoffiFunc | null = null
+let createSyntheticPointerDeviceNative: KoffiFunc | null = null
+let injectPointerInputNative: KoffiFunc | null = null
+let destroySyntheticPointerDeviceNative: KoffiFunc | null = null
 
-		_CreateSyntheticPointerDevice = _lib.func(
-			"void * CreateSyntheticPointerDevice(uint32 pointerType, uint32 maxCount, uint32 mode)",
-		)
-
-		_InjectPointerInput = _lib.func(
-			"int InjectPointerInput(void * device, const POINTER_TYPE_INFO * pointerInfo, uint32 count)",
-		)
-
-		_SendInput = _lib.func(
-			"uint32 SendInput(uint32 nInputs, const INPUT * pInputs, int cbSize)",
-		)
+function ensureLibrary(): void {
+	if (process.platform !== "win32") {
+		throw new Error("Windows input injection is only available on Windows")
 	}
+	if (library) return
+
+	library = koffi.load("user32.dll")
+	sendInputNative = library.func(
+		"uint32 SendInput(uint32 nInputs, const InjectINPUT * pInputs, int cbSize)",
+	)
+	createSyntheticPointerDeviceNative = library.func(
+		"void * CreateSyntheticPointerDevice(uint32 pointerType, uint32 maxCount, uint32 mode)",
+	)
+	injectPointerInputNative = library.func(
+		"int InjectSyntheticPointerInput(void * device, const InjectPOINTER_TYPE_INFO * pointerInfo, uint32 count)",
+	)
+	destroySyntheticPointerDeviceNative = library.func(
+		"void DestroySyntheticPointerDevice(void * device)",
+	)
 }
 
-// ---- Exports ----
 export const INPUT_STRUCT_SIZE = koffi.sizeof(INPUT)
 
-export function SendInput(
-	count: number,
-	events: unknown,
-	size: number,
-): number {
-	if (count < 0 || count > 1000) {
-		throw new Error(`Invalid event count: ${count}`)
+export function sendInput(events: WindowsInput[]): number {
+	if (events.length === 0) return 0
+	if (events.length > 1000) {
+		throw new Error("SendInput event count exceeds 1000")
 	}
-	if (size !== INPUT_STRUCT_SIZE) {
-		throw new Error(`Size mismatch: expected ${INPUT_STRUCT_SIZE}, got ${size}`)
-	}
-	ensureLib()
-	if (!_SendInput) {
-		throw new Error("Failed to load SendInput from user32.dll")
-	}
-	return _SendInput(count, events, size) as number
+	ensureLibrary()
+	if (!sendInputNative) throw new Error("SendInput is unavailable")
+
+	const normalized = events.map((event) => ({
+		...event,
+		__pad: 0,
+		u: {
+			...event.u,
+			...(event.u.mi
+				? {
+						mi: {
+							time: 0,
+							dwExtraInfo: 0,
+							...event.u.mi,
+						},
+					}
+				: {}),
+			...(event.u.ki
+				? {
+						ki: {
+							time: 0,
+							dwExtraInfo: 0,
+							...event.u.ki,
+						},
+					}
+				: {}),
+		},
+	}))
+
+	return sendInputNative(
+		normalized.length,
+		normalized,
+		INPUT_STRUCT_SIZE,
+	) as number
 }
 
-export function CreateSyntheticPointerDevice(
+export function createSyntheticPointerDevice(
 	pointerType: number,
 	maxCount: number,
 	mode: number,
 ): unknown {
-	ensureLib()
-	if (!_CreateSyntheticPointerDevice) {
-		throw new Error(
-			"Failed to load CreateSyntheticPointerDevice from user32.dll",
-		)
+	ensureLibrary()
+	if (!createSyntheticPointerDeviceNative) {
+		throw new Error("CreateSyntheticPointerDevice is unavailable")
 	}
-	return _CreateSyntheticPointerDevice(pointerType, maxCount, mode)
+	const handle = createSyntheticPointerDeviceNative(pointerType, maxCount, mode)
+	if (!handle) throw new Error("CreateSyntheticPointerDevice failed")
+	return handle
 }
 
-export function InjectPointerInput(
+export function injectPointerInput(
 	device: unknown,
 	pointerInfo: unknown,
 	count: number,
-): number {
-	if (!device) {
-		throw new Error("Invalid device handle")
+): boolean {
+	if (!device) throw new Error("Invalid synthetic pointer device")
+	if (count < 1) throw new Error("Pointer count must be positive")
+	ensureLibrary()
+	if (!injectPointerInputNative) {
+		throw new Error("InjectSyntheticPointerInput is unavailable")
 	}
-	if (count < 0 || count > 100) {
-		throw new Error(`Invalid pointer count: ${count}`)
+	return Boolean(injectPointerInputNative(device, pointerInfo, count))
+}
+
+export function destroySyntheticPointerDevice(device: unknown): void {
+	if (!device) return
+	ensureLibrary()
+	if (!destroySyntheticPointerDeviceNative) {
+		throw new Error("DestroySyntheticPointerDevice is unavailable")
 	}
-	ensureLib()
-	if (!_InjectPointerInput) {
-		throw new Error("Failed to load InjectPointerInput from user32.dll")
-	}
-	return _InjectPointerInput(device, pointerInfo, count) as number
+	destroySyntheticPointerDeviceNative(device)
 }

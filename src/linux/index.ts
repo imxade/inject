@@ -1,437 +1,197 @@
-/**
- * Linux uinput-based input injection implementation.
- *
- * Creates and manages virtual mouse, keyboard, and touch devices,
- * providing a unified interface for injecting input events. Handles
- * device initialization, capability registration, event injection,
- * and cleanup while delegating keyboard and touch logic to their
- * respective platform-specific modules.
- */
-import {
-	openUinput,
-	closeUinput,
-	writeEvent,
-	ioctlInt,
-	ioctlStruct,
-	ioctlNull,
-} from "./structs.js"
-
 import {
 	EV_SYN,
-	EV_KEY,
-	EV_REL,
-	EV_ABS,
 	SYN_REPORT,
-	REL_X,
-	REL_Y,
-	REL_WHEEL,
-	REL_HWHEEL,
-	BTN_LEFT,
-	BTN_RIGHT,
-	BTN_MIDDLE,
-	BTN_TOUCH,
-	BTN_TOOL_FINGER,
-	BTN_TOOL_DOUBLETAP,
-	BTN_TOOL_TRIPLETAP,
-	BTN_TOOL_QUADTAP,
-	ABS_MT_SLOT,
-	ABS_MT_TRACKING_ID,
-	ABS_MT_POSITION_X,
-	ABS_MT_POSITION_Y,
-	ABS_MT_TOUCH_MAJOR,
-	ABS_MT_PRESSURE,
-	ABS_X,
-	ABS_Y,
-	UI_SET_EVBIT,
-	UI_SET_KEYBIT,
-	UI_SET_RELBIT,
-	UI_SET_ABSBIT,
-	UI_DEV_SETUP,
 	UI_ABS_SETUP,
 	UI_DEV_CREATE,
 	UI_DEV_DESTROY,
+	UI_DEV_SETUP,
+	UI_SET_ABSBIT,
+	UI_SET_EVBIT,
+	UI_SET_KEYBIT,
+	UI_SET_PROPBIT,
+	UI_SET_RELBIT,
+	UINPUT_MAX_NAME_SIZE,
 	UINPUT_PATH,
-	MAX_CONTACTS,
-	KEY_PRESS,
-	KEY_RELEASE,
 } from "./constants.js"
-import { WHEEL_SCALE } from "../constants.js"
-import { LinuxKeyboard } from "./keyboard.js"
-import { LinuxTouch } from "./touch.js"
-import { LINUX_KEY_MAP } from "../keyMap.js"
-import type { InputConfig, TouchContact } from "../types.js"
-import { DEFAULT_CONFIG } from "../constants.js"
+import {
+	closeUinput,
+	ioctlInt,
+	ioctlNull,
+	ioctlStruct,
+	openUinput,
+	writeEvent,
+} from "./structs.js"
 
-const BUS_USB = 0x03
-const ABS_MAX_COORD = 65535
+export * from "./constants.js"
+export {
+	INPUT_EVENT_SIZE,
+	InputAbsinfo,
+	InputEvent,
+	UinputAbsSetup,
+	UinputSetup,
+} from "./structs.js"
 
-class UinputDevice {
-	fd = -1
-	private name: string
+export interface UinputDeviceIdentity {
+	bustype: number
+	vendor: number
+	product: number
+	version: number
+}
 
-	constructor(name: string) {
-		this.name = name
-	}
+export interface UinputDeviceOptions {
+	name: string
+	identity: UinputDeviceIdentity
+	path?: string
+}
 
-	open(): boolean {
-		try {
-			const fd = openUinput(UINPUT_PATH)
-			this.fd = fd
-			return true
-		} catch (err) {
-			console.error(`[${this.name}] Failed to open ${UINPUT_PATH}:`, err)
-			console.error(
-				`[${this.name}] Ensure /dev/uinput exists and the process has write permission.`,
-			)
-			return false
+export interface UinputAbsoluteAxis {
+	minimum: number
+	maximum: number
+	fuzz?: number
+	flat?: number
+	resolution?: number
+}
+
+export class UinputDevice {
+	readonly fd: number
+	private readonly options: UinputDeviceOptions
+	private created = false
+	private closed = false
+
+	constructor(options: UinputDeviceOptions) {
+		if (process.platform !== "linux") {
+			throw new Error("UinputDevice is only available on Linux")
 		}
+		this.options = options
+		this.fd = openUinput(options.path ?? UINPUT_PATH)
 	}
 
-	create(deviceName: string): boolean {
-		// Build null-padded name buffer (80 bytes)
-		const nameBuf = new Array(80).fill(0)
-		for (let i = 0; i < Math.min(deviceName.length, 79); i++) {
-			nameBuf[i] = deviceName.charCodeAt(i)
+	setEventBit(bit: number): this {
+		this.ioctlBit(UI_SET_EVBIT, bit)
+		return this
+	}
+
+	setKeyBit(bit: number): this {
+		this.ioctlBit(UI_SET_KEYBIT, bit)
+		return this
+	}
+
+	setRelativeBit(bit: number): this {
+		this.ioctlBit(UI_SET_RELBIT, bit)
+		return this
+	}
+
+	setAbsoluteBit(bit: number): this {
+		this.ioctlBit(UI_SET_ABSBIT, bit)
+		return this
+	}
+
+	setPropertyBit(bit: number): this {
+		this.ioctlBit(UI_SET_PROPBIT, bit)
+		return this
+	}
+
+	configureAbsoluteAxis(code: number, axis: UinputAbsoluteAxis): this {
+		this.assertOpen()
+		const ret = ioctlStruct(this.fd, UI_ABS_SETUP, "uinput_abs_setup *", {
+			code,
+			__pad: 0,
+			absinfo: {
+				value: 0,
+				minimum: axis.minimum,
+				maximum: axis.maximum,
+				fuzz: axis.fuzz ?? 0,
+				flat: axis.flat ?? 0,
+				resolution: axis.resolution ?? 0,
+			},
+		})
+		if (ret < 0) {
+			throw new Error(`UI_ABS_SETUP failed for code ${code} (ret=${ret})`)
+		}
+		return this
+	}
+
+	create(): this {
+		this.assertOpen()
+		if (this.created) return this
+
+		const name = new Array(UINPUT_MAX_NAME_SIZE).fill(0)
+		for (
+			let index = 0;
+			index < Math.min(this.options.name.length, UINPUT_MAX_NAME_SIZE - 1);
+			index++
+		) {
+			name[index] = this.options.name.charCodeAt(index)
 		}
 
 		const setup = {
-			bustype: BUS_USB,
-			vendor: 0x1234,
-			product: 0x5678,
-			version: 1,
-			name: nameBuf,
+			bustype: this.options.identity.bustype,
+			vendor: this.options.identity.vendor,
+			product: this.options.identity.product,
+			version: this.options.identity.version,
+			name,
 			ff_effects_max: 0,
 		}
 
-		const ret = ioctlStruct(this.fd, UI_DEV_SETUP, "uinput_setup *", setup)
+		const setupResult = ioctlStruct(
+			this.fd,
+			UI_DEV_SETUP,
+			"uinput_setup *",
+			setup,
+		)
+		if (setupResult < 0) {
+			throw new Error(`UI_DEV_SETUP failed (ret=${setupResult})`)
+		}
+
+		const createResult = ioctlNull(this.fd, UI_DEV_CREATE)
+		if (createResult < 0) {
+			throw new Error(`UI_DEV_CREATE failed (ret=${createResult})`)
+		}
+
+		this.created = true
+		return this
+	}
+
+	emit(type: number, code: number, value: number): this {
+		this.assertCreated()
+		if (!writeEvent(this.fd, type, code, value)) {
+			throw new Error("Failed to write uinput event")
+		}
+		return this
+	}
+
+	sync(): this {
+		return this.emit(EV_SYN, SYN_REPORT, 0)
+	}
+
+	destroy(): void {
+		if (this.closed) return
+		if (this.created) {
+			ioctlNull(this.fd, UI_DEV_DESTROY)
+			this.created = false
+		}
+		closeUinput(this.fd)
+		this.closed = true
+	}
+
+	private ioctlBit(request: number, bit: number): void {
+		this.assertOpen()
+		const ret = ioctlInt(this.fd, request, bit)
 		if (ret < 0) {
-			console.error(`[${this.name}] UI_DEV_SETUP failed (ret=${ret})`)
-			return false
-		}
-
-		const createRet = ioctlNull(this.fd, UI_DEV_CREATE)
-		if (createRet < 0) {
-			console.error(`[${this.name}] UI_DEV_CREATE failed (ret=${createRet})`)
-			return false
-		}
-		return true
-	}
-
-	setEvbit(bit: number): void {
-		ioctlInt(this.fd, UI_SET_EVBIT, bit)
-	}
-	setKeybit(bit: number): void {
-		ioctlInt(this.fd, UI_SET_KEYBIT, bit)
-	}
-	setRelbit(bit: number): void {
-		ioctlInt(this.fd, UI_SET_RELBIT, bit)
-	}
-	setAbsbit(bit: number): void {
-		ioctlInt(this.fd, UI_SET_ABSBIT, bit)
-	}
-
-	setupAbs(code: number, min: number, max: number, fuzz = 0, flat = 0): void {
-		const setup = {
-			code,
-			__pad: 0,
-			__pad2: 0,
-			absinfo: {
-				value: 0,
-				minimum: min,
-				maximum: max,
-				fuzz,
-				flat,
-				resolution: 0,
-			},
-		}
-		ioctlStruct(this.fd, UI_ABS_SETUP, "uinput_abs_setup *", setup)
-	}
-
-	destroy(): void {
-		if (this.fd >= 0) {
-			try {
-				ioctlNull(this.fd, UI_DEV_DESTROY)
-			} catch {}
-			try {
-				closeUinput(this.fd)
-			} catch {}
-			this.fd = -1
+			throw new Error(`uinput ioctl 0x${request.toString(16)} failed for bit ${bit}`)
 		}
 	}
-}
 
-const activeInjectors = new Set<LinuxInputInjector>()
-
-function cleanupAllInjectors(): void {
-	for (const injector of activeInjectors) {
-		try {
-			injector.destroy()
-		} catch {}
-	}
-	activeInjectors.clear()
-}
-
-if (typeof process !== "undefined") {
-	process.once("exit", cleanupAllInjectors)
-	process.once("SIGINT", () => {
-		cleanupAllInjectors()
-		process.kill(process.pid, "SIGINT")
-	})
-	process.once("SIGTERM", () => {
-		cleanupAllInjectors()
-		process.kill(process.pid, "SIGTERM")
-	})
-}
-
-export class LinuxInputInjector {
-	private config: InputConfig
-	private mouseDev = new UinputDevice("Mouse")
-	private absMouseDev = new UinputDevice("AbsMouse")
-	private kbDev = new UinputDevice("Keyboard")
-	private touchDev = new UinputDevice("Touch")
-	private keyboard: LinuxKeyboard | null = null
-	private touch: LinuxTouch | null = null
-	private initialized = false
-	private lastAbsX: number | null = null
-	private lastAbsY: number | null = null
-
-	constructor(config: Partial<InputConfig> = {}) {
-		if (process.platform !== "linux") {
-			throw new Error("LinuxInputInjector can only be used on Linux")
+	private assertOpen(): void {
+		if (this.closed) {
+			throw new Error("UinputDevice is closed")
 		}
-		this.config = { ...DEFAULT_CONFIG, ...config }
-		this.initialize()
-		if (!this.initialized) {
-			throw new Error(
-				"Linux virtual input devices failed to initialize (check /dev/uinput permissions)",
-			)
+	}
+
+	private assertCreated(): void {
+		this.assertOpen()
+		if (!this.created) {
+			throw new Error("UinputDevice.create() must be called before emitting events")
 		}
-		activeInjectors.add(this)
-	}
-
-	updateConfig(config: Partial<InputConfig>): void {
-		this.config = { ...this.config, ...config }
-	}
-	injectMouseMove(dx: number, dy: number): void {
-		if (!this.initialized || (dx === 0 && dy === 0)) return
-		const fd = this.mouseDev.fd
-		writeEvent(fd, EV_REL, REL_X, Math.round(dx))
-		writeEvent(fd, EV_REL, REL_Y, Math.round(dy))
-		writeEvent(fd, EV_SYN, SYN_REPORT, 0)
-	}
-	// Warps the cursor to an absolute pixel position using a dedicated uinput ABS pointer device.
-	// Bypasses mouse acceleration and relative delta scaling for exact pixel positioning.
-	injectMouseAbsolute(x: number, y: number): void {
-		if (!this.initialized) return
-
-		// Normalize pixel coordinates against current config screen dimensions over fixed [0, 65535] range
-		const width = Math.max(1, this.config.screenWidth)
-		const height = Math.max(1, this.config.screenHeight)
-		const normX = Math.round(
-			Math.max(0, Math.min(ABS_MAX_COORD, (x / width) * ABS_MAX_COORD)),
-		)
-		const normY = Math.round(
-			Math.max(0, Math.min(ABS_MAX_COORD, (y / height) * ABS_MAX_COORD)),
-		)
-
-		const fd = this.absMouseDev.fd
-
-		// Linux kernel filters unchanged EV_ABS values. If the target coordinates match the last written
-		// values, write a 1-unit dummy offset first to force kernel absinfo state change.
-		if (this.lastAbsX === normX) {
-			const dummyX = normX > 0 ? normX - 1 : normX + 1
-			writeEvent(fd, EV_ABS, ABS_X, dummyX)
-		}
-		if (this.lastAbsY === normY) {
-			const dummyY = normY > 0 ? normY - 1 : normY + 1
-			writeEvent(fd, EV_ABS, ABS_Y, dummyY)
-		}
-
-		writeEvent(fd, EV_ABS, ABS_X, normX)
-		writeEvent(fd, EV_ABS, ABS_Y, normY)
-		writeEvent(fd, EV_SYN, SYN_REPORT, 0)
-
-		this.lastAbsX = normX
-		this.lastAbsY = normY
-	}
-
-	injectMouseButton(
-		button: "left" | "right" | "middle",
-		isDown: boolean,
-	): void {
-		if (!this.initialized) return
-
-		const codeMap = {
-			left: BTN_LEFT,
-			right: BTN_RIGHT,
-			middle: BTN_MIDDLE,
-		} as const
-		const code = codeMap[button]
-		const fd = this.mouseDev.fd
-
-		writeEvent(fd, EV_KEY, code, isDown ? KEY_PRESS : KEY_RELEASE)
-		writeEvent(fd, EV_SYN, SYN_REPORT, 0)
-	}
-
-	injectMouseWheel(dx: number, dy: number): void {
-		if (!this.initialized) return
-
-		const fd = this.mouseDev.fd
-		const invert = this.config.invertScroll ? -1 : 1
-
-		if (dy !== 0) {
-			// Positive dy = scroll down on trackpad
-			const amount = Math.round(dy * invert * WHEEL_SCALE)
-			writeEvent(fd, EV_REL, REL_WHEEL, amount)
-		}
-		if (dx !== 0) {
-			const amount = Math.round(dx * invert * WHEEL_SCALE)
-			writeEvent(fd, EV_REL, REL_HWHEEL, amount)
-		}
-		writeEvent(fd, EV_SYN, SYN_REPORT, 0)
-	}
-
-	// Keyboard
-	injectKey(key: string, pos?: string): void {
-		this.keyboard?.injectKey(key, pos ?? "")
-	}
-
-	injectCombo(keys: string[]): void {
-		this.keyboard?.injectCombo(keys)
-	}
-
-	injectText(text: string): void {
-		this.keyboard?.injectText(text)
-	}
-
-	// Touch
-
-	injectTouch(contacts: TouchContact[]): void {
-		this.touch?.injectTouch(contacts)
-	}
-
-	// Gamepad
-
-	// Cleanup
-
-	destroy(): void {
-		activeInjectors.delete(this)
-		this.touch?.releaseAll()
-		this.mouseDev.destroy()
-		this.absMouseDev.destroy()
-		this.kbDev.destroy()
-		this.touchDev.destroy()
-		this.initialized = false
-	}
-
-	// helpers
-	private initialize(): void {
-		const mouseOk = this.setupMouseDevice()
-		const absMouseOk = mouseOk ? this.setupAbsMouseDevice() : false
-		const kbOk = absMouseOk ? this.setupKeyboardDevice() : false
-		const touchOk = kbOk ? this.setupTouchDevice() : false
-
-		if (!mouseOk || !absMouseOk || !kbOk || !touchOk) {
-			const msg =
-				"One or more virtual uinput devices failed to initialize (check /dev/uinput permissions)"
-			console.error(`[LinuxInputInjector] ${msg}`)
-			this.destroy()
-			this.initialized = false
-			throw new Error(msg)
-		}
-
-		this.keyboard = new LinuxKeyboard(this.kbDev.fd)
-		this.touch = new LinuxTouch(this.touchDev.fd)
-
-		this.initialized = true
-		console.log("[LinuxInputInjector] Virtual input devices initialized")
-	}
-
-	private setupMouseDevice(): boolean {
-		if (!this.mouseDev.open()) return false
-		this.mouseDev.setEvbit(EV_KEY)
-		this.mouseDev.setEvbit(EV_REL)
-		this.mouseDev.setEvbit(EV_SYN)
-
-		this.mouseDev.setKeybit(BTN_LEFT)
-		this.mouseDev.setKeybit(BTN_RIGHT)
-		this.mouseDev.setKeybit(BTN_MIDDLE)
-
-		this.mouseDev.setRelbit(REL_X)
-		this.mouseDev.setRelbit(REL_Y)
-		this.mouseDev.setRelbit(REL_WHEEL)
-		this.mouseDev.setRelbit(REL_HWHEEL)
-
-		return this.mouseDev.create("Virtual Mouse")
-	}
-
-	private setupAbsMouseDevice(): boolean {
-		if (!this.absMouseDev.open()) return false
-		this.absMouseDev.setEvbit(EV_ABS)
-		this.absMouseDev.setEvbit(EV_KEY)
-		this.absMouseDev.setEvbit(EV_SYN)
-
-		this.absMouseDev.setKeybit(BTN_LEFT)
-		this.absMouseDev.setKeybit(BTN_RIGHT)
-		this.absMouseDev.setKeybit(BTN_MIDDLE)
-
-		this.absMouseDev.setAbsbit(ABS_X)
-		this.absMouseDev.setAbsbit(ABS_Y)
-
-		this.absMouseDev.setupAbs(ABS_X, 0, ABS_MAX_COORD)
-		this.absMouseDev.setupAbs(ABS_Y, 0, ABS_MAX_COORD)
-
-		return this.absMouseDev.create("Virtual Absolute Pointer")
-	}
-
-	private setupKeyboardDevice(): boolean {
-		if (!this.kbDev.open()) return false
-
-		this.kbDev.setEvbit(EV_KEY)
-		this.kbDev.setEvbit(EV_SYN)
-
-		// Register all key codes upfront
-		for (const code of Object.values(LINUX_KEY_MAP)) {
-			this.kbDev.setKeybit(code)
-		}
-
-		return this.kbDev.create("Virtual Keyboard")
-	}
-
-	private setupTouchDevice(): boolean {
-		if (!this.touchDev.open()) return false
-
-		this.touchDev.setEvbit(EV_ABS)
-		this.touchDev.setEvbit(EV_KEY)
-		this.touchDev.setEvbit(EV_SYN)
-
-		// Touch buttons
-		this.touchDev.setKeybit(BTN_TOUCH)
-		this.touchDev.setKeybit(BTN_TOOL_FINGER)
-		this.touchDev.setKeybit(BTN_TOOL_DOUBLETAP)
-		this.touchDev.setKeybit(BTN_TOOL_TRIPLETAP)
-		this.touchDev.setKeybit(BTN_TOOL_QUADTAP)
-
-		// Absolute axes
-		this.touchDev.setAbsbit(ABS_MT_SLOT)
-		this.touchDev.setAbsbit(ABS_MT_TRACKING_ID)
-		this.touchDev.setAbsbit(ABS_MT_POSITION_X)
-		this.touchDev.setAbsbit(ABS_MT_POSITION_Y)
-		this.touchDev.setAbsbit(ABS_MT_TOUCH_MAJOR)
-		this.touchDev.setAbsbit(ABS_MT_PRESSURE)
-		this.touchDev.setAbsbit(ABS_X)
-		this.touchDev.setAbsbit(ABS_Y)
-
-		// Abs ranges
-		this.touchDev.setupAbs(ABS_MT_SLOT, 0, MAX_CONTACTS - 1)
-		this.touchDev.setupAbs(ABS_MT_TRACKING_ID, -1, 0x7fffffff)
-		this.touchDev.setupAbs(ABS_MT_POSITION_X, 0, this.config.screenWidth)
-		this.touchDev.setupAbs(ABS_MT_POSITION_Y, 0, this.config.screenHeight)
-		this.touchDev.setupAbs(ABS_MT_TOUCH_MAJOR, 0, 255)
-		this.touchDev.setupAbs(ABS_MT_PRESSURE, 0, 255)
-		this.touchDev.setupAbs(ABS_X, 0, this.config.screenWidth)
-		this.touchDev.setupAbs(ABS_Y, 0, this.config.screenHeight)
-
-		return this.touchDev.create("Virtual Touchpad")
 	}
 }
