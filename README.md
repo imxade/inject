@@ -1,13 +1,12 @@
 # Inject
 
 A starting point for a standalone, cross-platform native input injection library
-for Node.js. The code is extracted from the input-driver layer used by
-[AOSSIE Rein](https://github.com/AOSSIE-Org/Rein) and is intended to evolve into
-a reusable alternative to app-coupled automation/input libraries.
+for Node.js. The code is extracted from an existing cross-platform input-driver
+layer and is intended to evolve into a reusable alternative to app-coupled
+automation/input libraries.
 
-This bootstrap is based on the direction in
-[AOSSIE-Org/Rein#380](https://github.com/AOSSIE-Org/Rein/issues/380). It is an
-initial isolation of the native injection concern, not a stable release.
+This bootstrap is an initial isolation of the native injection concern, not a
+stable release.
 
 ## Current scope
 
@@ -107,7 +106,6 @@ The next useful steps are:
 
 ## Provenance
 
-See [NOTICE](./NOTICE). The extracted code comes from AOSSIE Rein and is kept
-under Apache-2.0. The goal of this repository is to provide a clean home for the
-native input layer so Rein and other projects can consume it as a normal
-library.
+See [NOTICE](./NOTICE). The extracted code is kept under Apache-2.0. The goal
+of this repository is to provide a clean home for the native input layer so
+applications can consume it as a normal library.

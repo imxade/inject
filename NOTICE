@@ -1,10 +1,7 @@
 Inject
 
-This repository contains an initial extraction of the cross-platform native input
-injection layer developed in AOSSIE-Org/Rein for issue #380.
-
-Source:
-https://github.com/AOSSIE-Org/Rein
+This repository contains an initial extraction of a cross-platform native input
+injection layer for use as a standalone library.
 
 The copied and adapted portions originate from Rein's src/server/drivers,
 src/server/types.ts, and src/server/constants.ts on the main branch and remain
