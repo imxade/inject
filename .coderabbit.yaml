@@ -1,0 +1,22 @@
+language: "en-US"
+
+reviews:
+  profile: "assertive"
+  request_changes_workflow: true
+  auto_review:
+    enabled: true
+    drafts: false
+  tools:
+    biome:
+      enabled: true
+  path_instructions:
+    - path: "src/**"
+      instructions: |
+        Review this as a reusable cross-platform input-injection library.
+        Flag platform-specific imports that can execute on the wrong OS.
+        Check native resource lifecycle, cleanup, FFI error handling, and public API stability.
+        Keep Rein-specific networking, UI, and server concerns out of this package.
+    - path: ".github/workflows/**"
+      instructions: |
+        Review workflow permissions, untrusted pull-request execution, action versions,
+        dependency-install behavior, and whether bot-generated pull requests can pass CI.

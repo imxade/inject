@@ -31,6 +31,8 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "check": "biome check src test vitest.config.ts",
+    "check:fix": "biome check --write src test vitest.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
@@ -49,11 +51,12 @@
     "node": ">=20"
   },
   "dependencies": {
-    "koffi": "^2.16.2"
+    "koffi": "2.16.2"
   },
   "devDependencies": {
-    "@types/node": "^22.10.2",
-    "typescript": "^7.0.2",
-    "vitest": "^3.0.5"
+    "@biomejs/biome": "2.5.15",
+    "@types/node": "22.10.2",
+    "typescript": "7.0.2",
+    "vitest": "3.0.5"
   }
 }
