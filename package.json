@@ -1,0 +1,59 @@
+{
+  "name": "@imxade/inject",
+  "version": "0.0.1",
+  "description": "Cross-platform native mouse, keyboard, text, scroll, and touch injection for Node.js",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./linux": {
+      "types": "./dist/linux/index.d.ts",
+      "import": "./dist/linux/index.js"
+    },
+    "./mac": {
+      "types": "./dist/mac/index.d.ts",
+      "import": "./dist/mac/index.js"
+    },
+    "./windows": {
+      "types": "./dist/windows/index.d.ts",
+      "import": "./dist/windows/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "input",
+    "automation",
+    "keyboard",
+    "mouse",
+    "touch",
+    "koffi",
+    "native",
+    "cross-platform"
+  ],
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "koffi": "^2.16.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^7.0.2",
+    "vitest": "^3.0.5"
+  }
+}
