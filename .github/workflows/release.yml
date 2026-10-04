@@ -1,0 +1,146 @@
+name: Create Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (for example: 0.2.0)"
+        required: true
+        type: string
+      release_name:
+        description: "Optional release title (defaults to v<version>)"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          ref: master
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - name: Validate release version
+        id: version
+        shell: bash
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$REQUESTED_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Version must be stable SemVer in X.Y.Z form."
+            exit 1
+          fi
+
+          CURRENT_VERSION="$(node -p "require('./package.json').version")"
+
+          node - "$CURRENT_VERSION" "$REQUESTED_VERSION" <<'NODE'
+          const current = process.argv[2].split(".").map(Number)
+          const requested = process.argv[3].split(".").map(Number)
+
+          const compare = (a, b) => {
+            for (let i = 0; i < 3; i++) {
+              if (a[i] !== b[i]) return a[i] - b[i]
+            }
+            return 0
+          }
+
+          if (compare(requested, current) < 0) {
+            console.error(
+              `Requested version ${process.argv[3]} is lower than package version ${process.argv[2]}.`,
+            )
+            process.exit(1)
+          }
+          NODE
+
+          TAG="v$REQUESTED_VERSION"
+
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists."
+            exit 1
+          fi
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists."
+            exit 1
+          fi
+
+          if npm view "@imxade/inject@$REQUESTED_VERSION" version >/dev/null 2>&1; then
+            echo "@imxade/inject@$REQUESTED_VERSION is already published on npm."
+            exit 1
+          fi
+
+          echo "version=$REQUESTED_VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Set package version
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: npm version "$VERSION" --no-git-tag-version --allow-same-version
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Verify release
+        run: |
+          npm run check
+          npm run typecheck
+          npm test
+          npm run build
+          npm pack --dry-run
+
+      - name: Commit version
+        shell: bash
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if ! git diff --quiet -- package.json; then
+            git add package.json
+            git commit -m "chore(release): $TAG"
+            git push origin HEAD:master
+          fi
+
+      - name: Create tag and GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          RELEASE_NAME: ${{ inputs.release_name }}
+        run: |
+          set -euo pipefail
+
+          TITLE="$RELEASE_NAME"
+          if [[ -z "$TITLE" ]]; then
+            TITLE="$TAG"
+          fi
+
+          git tag "$TAG"
+          git push origin "$TAG"
+
+          gh release create "$TAG" \
+            --title "$TITLE" \
+            --generate-notes

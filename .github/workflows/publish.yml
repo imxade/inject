@@ -1,20 +1,27 @@
 name: Publish to npm
 
 on:
-  workflow_dispatch:
+  release:
+    types: [published]
 
 permissions:
   contents: read
   id-token: write
 
+concurrency:
+  group: npm-publish-${{ github.event.release.tag_name }}
+  cancel-in-progress: false
+
 jobs:
   publish:
+    if: github.event.release.prerelease == false
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout released tag
         uses: actions/checkout@v7
         with:
+          ref: ${{ github.event.release.tag_name }}
           persist-credentials: false
 
       - name: Setup Node.js
@@ -25,10 +32,48 @@ jobs:
           package-manager-cache: false
 
       - name: Use npm with trusted publishing support
-        run: npm install --global npm@11.20.0
+        run: npm install --global npm@11.21.0
+
+      - name: Validate release version
+        id: version
+        shell: bash
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release tag must use vX.Y.Z."
+            exit 1
+          fi
+
+          VERSION="${TAG#v}"
+          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+
+          if [[ "$VERSION" != "$PACKAGE_VERSION" ]]; then
+            echo "Release tag $TAG does not match package.json version $PACKAGE_VERSION."
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Skip existing npm version
+        id: existing
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if npm view "@imxade/inject@$VERSION" version >/dev/null 2>&1; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "@imxade/inject@$VERSION is already on npm; nothing to publish."
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Install dependencies
+        if: steps.existing.outputs.published == 'false'
         run: npm install --no-audit --no-fund
 
-      - name: Publish
-        run: npm publish
+      - name: Publish package
+        if: steps.existing.outputs.published == 'false'
+        run: npm publish --access public

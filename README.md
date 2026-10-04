@@ -219,6 +219,19 @@ A useful test for a contribution is: **does this expose a native input mechanism
 or does it decide how an application should interpret input?** Only the former
 belongs here.
 
+## Releases
+
+Releases are automated. From GitHub Actions, run **Create Release**, enter a
+stable SemVer such as `0.2.0`, and optionally enter a release title.
+
+The workflow updates `package.json`, verifies the package, commits the version,
+creates the `vX.Y.Z` tag, and creates a GitHub Release with generated release
+notes containing the merged pull requests since the previous release. Publishing
+that GitHub Release automatically triggers npm publishing for the same version.
+
+After the initial npm package and trusted publisher are configured, releases do
+not require local npm publishing or npm tokens.
+
 ## Development
 
 ```sh
