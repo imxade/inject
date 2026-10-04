@@ -37,7 +37,10 @@
     "test": "vitest run",
     "prepare": "npm run build",
     "prepublishOnly": "npm run check && npm run typecheck && npm test",
-    "pack:check": "npm pack --dry-run"
+    "pack:check": "npm pack --dry-run",
+    "test:e2e:linux": "vitest run test/native/linux.e2e.test.ts",
+    "test:e2e:macos": "vitest run test/native/macos.e2e.test.ts",
+    "test:e2e:windows": "vitest run test/native/windows.e2e.test.ts"
   },
   "keywords": [
     "input",

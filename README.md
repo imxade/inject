@@ -238,6 +238,25 @@ allowed by their dependency's SemVer range. To explicitly move to the newest
 release even across a SemVer boundary, run
 `npm install @imxade/inject@latest`.
 
+## Native E2E testing
+
+The normal CI matrix verifies formatting, types, tests, builds, and package
+installation on GitHub-hosted Linux, macOS, and Windows runners.
+
+`.github/workflows/native-e2e.yml` adds operating-system boundary tests:
+
+- Linux uses a real `uinput` device and reads the resulting evdev frames back.
+- macOS posts CoreGraphics keyboard events and observes them with a CGEventTap.
+- Windows calls `SendInput` and verifies the resulting OS keyboard state.
+
+Linux runs on GitHub-hosted CI. macOS and Windows native delivery tests require
+dedicated self-hosted runners labelled `inject-e2e`, and are enabled only when
+the repository variable `NATIVE_E2E_ENABLED` is set to `true`. They never run
+for pull requests, so untrusted fork code is not sent to persistent runners.
+
+Release creation requires CI, CodeQL, and Native E2E workflow runs to be green
+for the current `master` commit.
+
 ## Development
 
 ```sh

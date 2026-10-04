@@ -45,7 +45,7 @@ jobs:
           set -euo pipefail
           HEAD_SHA="$(git rev-parse HEAD)"
 
-          for workflow in ci.yml codeql.yml; do
+          for workflow in ci.yml codeql.yml native-e2e.yml; do
             result="$(gh run list \
               --workflow "$workflow" \
               --commit "$HEAD_SHA" \
