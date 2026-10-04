@@ -42,12 +42,6 @@ import {
 	ABS_MT_PRESSURE,
 	ABS_X,
 	ABS_Y,
-	ABS_Z,
-	ABS_RX,
-	ABS_RY,
-	ABS_RZ,
-	ABS_HAT0X,
-	ABS_HAT0Y,
 	UI_SET_EVBIT,
 	UI_SET_KEYBIT,
 	UI_SET_RELBIT,
@@ -441,38 +435,5 @@ export class LinuxInputInjector {
 		return this.touchDev.create("Virtual Touchpad")
 	}
 
-	private setupGamepadDevice(): boolean {
-		if (!this.gamepadDev.open()) return false
 
-		this.gamepadDev.setEvbit(EV_KEY)
-		this.gamepadDev.setEvbit(EV_ABS)
-		this.gamepadDev.setEvbit(EV_SYN)
-
-		// Gamepad buttons
-		for (const code of Object.values(GAMEPAD_BUTTON_MAP)) {
-			this.gamepadDev.setKeybit(code)
-		}
-
-		// Absolute axes
-		this.gamepadDev.setAbsbit(ABS_X)
-		this.gamepadDev.setAbsbit(ABS_Y)
-		this.gamepadDev.setAbsbit(ABS_Z)
-		this.gamepadDev.setAbsbit(ABS_RX)
-		this.gamepadDev.setAbsbit(ABS_RY)
-		this.gamepadDev.setAbsbit(ABS_RZ)
-		this.gamepadDev.setAbsbit(ABS_HAT0X)
-		this.gamepadDev.setAbsbit(ABS_HAT0Y)
-
-		// Abs ranges
-		this.gamepadDev.setupAbs(ABS_X, -32767, 32767, 16, 128)
-		this.gamepadDev.setupAbs(ABS_Y, -32767, 32767, 16, 128)
-		this.gamepadDev.setupAbs(ABS_Z, 0, 255)
-		this.gamepadDev.setupAbs(ABS_RX, -32767, 32767, 16, 128)
-		this.gamepadDev.setupAbs(ABS_RY, -32767, 32767, 16, 128)
-		this.gamepadDev.setupAbs(ABS_RZ, 0, 255)
-		this.gamepadDev.setupAbs(ABS_HAT0X, -1, 1)
-		this.gamepadDev.setupAbs(ABS_HAT0Y, -1, 1)
-
-		return this.gamepadDev.create("Virtual Gamepad")
-	}
 }
