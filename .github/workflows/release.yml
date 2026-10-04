@@ -84,8 +84,8 @@ jobs:
           fi
 
           if npm view "@imxade/inject@$REQUESTED_VERSION" version >/dev/null 2>&1; then
-            echo "@imxade/inject@$REQUESTED_VERSION is already published on npm."
-            exit 1
+            echo "Note: @imxade/inject@$REQUESTED_VERSION already exists on npm."
+            echo "The GitHub release can still be created; npm publishing will safely no-op."
           fi
 
           echo "version=$REQUESTED_VERSION" >> "$GITHUB_OUTPUT"

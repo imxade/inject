@@ -230,7 +230,13 @@ notes containing the merged pull requests since the previous release. Publishing
 that GitHub Release automatically triggers npm publishing for the same version.
 
 After the initial npm package and trusted publisher are configured, releases do
-not require local npm publishing or npm tokens.
+not require local npm publishing or npm tokens. Publishing a normal release
+updates npm's `latest` dist-tag automatically.
+
+Consumers can run `npm update @imxade/inject` to receive the newest version
+allowed by their dependency's SemVer range. To explicitly move to the newest
+release even across a SemVer boundary, run
+`npm install @imxade/inject@latest`.
 
 ## Development
 
