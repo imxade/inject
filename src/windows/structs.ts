@@ -147,31 +147,33 @@ export function sendInput(events: WindowsInput[]): number {
 	ensureLibrary()
 	if (!sendInputNative) throw new Error("SendInput is unavailable")
 
-	const normalized = events.map((event) => ({
-		...event,
-		__pad: 0,
-		u: {
-			...event.u,
-			...(event.u.mi
-				? {
-						mi: {
-							time: 0,
-							dwExtraInfo: 0,
-							...event.u.mi,
-						},
-					}
-				: {}),
-			...(event.u.ki
-				? {
-						ki: {
-							time: 0,
-							dwExtraInfo: 0,
-							...event.u.ki,
-						},
-					}
-				: {}),
-		},
-	}))
+	const normalized = events.map((event) => {
+		if ("mi" in event.u) {
+			return {
+				...event,
+				__pad: 0,
+				u: {
+					mi: {
+						time: 0,
+						dwExtraInfo: 0,
+						...event.u.mi,
+					},
+				},
+			}
+		}
+
+		return {
+			...event,
+			__pad: 0,
+			u: {
+				ki: {
+					time: 0,
+					dwExtraInfo: 0,
+					...event.u.ki,
+				},
+			},
+		}
+	})
 
 	return sendInputNative(
 		normalized.length,
