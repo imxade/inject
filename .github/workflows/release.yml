@@ -13,6 +13,7 @@ on:
         type: string
 
 permissions:
+  actions: read
   contents: write
 
 concurrency:
@@ -35,6 +36,29 @@ jobs:
         with:
           node-version: 22
           package-manager-cache: false
+
+      - name: Require green master checks
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          HEAD_SHA="$(git rev-parse HEAD)"
+
+          for workflow in ci.yml codeql.yml; do
+            result="$(gh run list \
+              --workflow "$workflow" \
+              --commit "$HEAD_SHA" \
+              --limit 1 \
+              --json status,conclusion \
+              --jq '.[0] | "\(.status) \(.conclusion)"')"
+
+            if [[ "$result" != "completed success" ]]; then
+              echo "$workflow is not green for $HEAD_SHA (status: ${result:-missing})."
+              echo "Wait for master checks to pass, then run the release workflow again."
+              exit 1
+            fi
+          done
 
       - name: Validate release version
         id: version
@@ -142,4 +166,5 @@ jobs:
 
           gh release create "$TAG" \
             --title "$TITLE" \
-            --generate-notes
+            --generate-notes \
+            --verify-tag
