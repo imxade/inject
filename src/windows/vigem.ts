@@ -83,7 +83,9 @@ export class ViGEmClient {
 		const result = this.addTarget(this.client, handle) as number
 		if (result !== VIGEM_ERROR_NONE) {
 			this.freeTarget(handle)
-			throw new Error(\n\t\t\t\t`vigem_target_add failed with code 0x${result.toString(16)}`,\n\t\t\t)
+			throw new Error(
+				`vigem_target_add failed with code 0x${result.toString(16)}`,
+			)
 		}
 
 		const target = new ViGEmXbox360Target(

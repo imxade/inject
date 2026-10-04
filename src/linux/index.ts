@@ -178,7 +178,9 @@ export class UinputDevice {
 		this.assertOpen()
 		const ret = ioctlInt(this.fd, request, bit)
 		if (ret < 0) {
-			throw new Error(\n\t\t\t\t`uinput ioctl 0x${request.toString(16)} failed for bit ${bit}`,\n\t\t\t)
+			throw new Error(
+				`uinput ioctl 0x${request.toString(16)} failed for bit ${bit}`,
+			)
 		}
 	}
 
@@ -191,7 +193,9 @@ export class UinputDevice {
 	private assertCreated(): void {
 		this.assertOpen()
 		if (!this.created) {
-			throw new Error(\n\t\t\t\t"UinputDevice.create() must be called before emitting events",\n\t\t\t)
+			throw new Error(
+				"UinputDevice.create() must be called before emitting events",
+			)
 		}
 	}
 }
