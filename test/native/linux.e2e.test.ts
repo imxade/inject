@@ -47,46 +47,41 @@ async function waitForEventNode(
 }
 
 async function readEvents(
-	path: string,
+	handle: Awaited<ReturnType<typeof open>>,
 	expectedCount: number,
 	timeoutMs = 5000,
 ): Promise<NativeEvent[]> {
-	const handle = await open(path, fsConstants.O_RDONLY | fsConstants.O_NONBLOCK)
 	const events: NativeEvent[] = []
 	const buffer = Buffer.alloc(INPUT_EVENT_SIZE * 16)
 	const deadline = Date.now() + timeoutMs
 
-	try {
-		while (Date.now() < deadline && events.length < expectedCount) {
-			try {
-				const { bytesRead } = await handle.read(buffer, 0, buffer.length, null)
-				for (
-					let offset = 0;
-					offset + INPUT_EVENT_SIZE <= bytesRead;
-					offset += INPUT_EVENT_SIZE
-				) {
-					const event = {
-						type: buffer.readUInt16LE(offset + 16),
-						code: buffer.readUInt16LE(offset + 18),
-						value: buffer.readInt32LE(offset + 20),
-					}
-					if (
-						(event.type === EV_KEY && event.code === KEY_F24) ||
-						(event.type === EV_SYN && event.code === SYN_REPORT)
-					) {
-						events.push(event)
-					}
+	while (Date.now() < deadline && events.length < expectedCount) {
+		try {
+			const { bytesRead } = await handle.read(buffer, 0, buffer.length, null)
+			for (
+				let offset = 0;
+				offset + INPUT_EVENT_SIZE <= bytesRead;
+				offset += INPUT_EVENT_SIZE
+			) {
+				const event = {
+					type: buffer.readUInt16LE(offset + 16),
+					code: buffer.readUInt16LE(offset + 18),
+					value: buffer.readInt32LE(offset + 20),
 				}
-			} catch (error) {
-				const code = (error as NodeJS.ErrnoException).code
-				if (code !== "EAGAIN" && code !== "EWOULDBLOCK") throw error
+				if (
+					(event.type === EV_KEY && event.code === KEY_F24) ||
+					(event.type === EV_SYN && event.code === SYN_REPORT)
+				) {
+					events.push(event)
+				}
 			}
-			if (events.length < expectedCount) {
-				await new Promise((resolve) => setTimeout(resolve, 10))
-			}
+		} catch (error) {
+			const code = (error as NodeJS.ErrnoException).code
+			if (code !== "EAGAIN" && code !== "EWOULDBLOCK") throw error
 		}
-	} finally {
-		await handle.close()
+		if (events.length < expectedCount) {
+			await new Promise((resolve) => setTimeout(resolve, 10))
+		}
 	}
 
 	if (events.length < expectedCount) {
@@ -115,17 +110,26 @@ describe.runIf(enabled)("Linux uinput native E2E", () => {
 			device.setEventBit(EV_KEY).setEventBit(EV_SYN).setKeyBit(KEY_F24).create()
 
 			const eventPath = await waitForEventNode(name)
-			const eventsPromise = readEvents(eventPath, 4)
+			const eventHandle = await open(
+				eventPath,
+				fsConstants.O_RDONLY | fsConstants.O_NONBLOCK,
+			)
 
-			device.emit(EV_KEY, KEY_F24, 1).sync()
-			device.emit(EV_KEY, KEY_F24, 0).sync()
+			try {
+				const eventsPromise = readEvents(eventHandle, 4)
 
-			await expect(eventsPromise).resolves.toEqual([
-				{ type: EV_KEY, code: KEY_F24, value: 1 },
-				{ type: EV_SYN, code: SYN_REPORT, value: 0 },
-				{ type: EV_KEY, code: KEY_F24, value: 0 },
-				{ type: EV_SYN, code: SYN_REPORT, value: 0 },
-			])
+				device.emit(EV_KEY, KEY_F24, 1).sync()
+				device.emit(EV_KEY, KEY_F24, 0).sync()
+
+				await expect(eventsPromise).resolves.toEqual([
+					{ type: EV_KEY, code: KEY_F24, value: 1 },
+					{ type: EV_SYN, code: SYN_REPORT, value: 0 },
+					{ type: EV_KEY, code: KEY_F24, value: 0 },
+					{ type: EV_SYN, code: SYN_REPORT, value: 0 },
+				])
+			} finally {
+				await eventHandle.close()
+			}
 		} finally {
 			device.destroy()
 		}
