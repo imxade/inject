@@ -9,6 +9,13 @@ updates:
     commit-message:
       prefix: "chore(deps)"
       prefix-development: "chore(deps-dev)"
+    ignore:
+      - dependency-name: "koffi"
+        update-types:
+          - "version-update:semver-major"
+      - dependency-name: "vitest"
+        update-types:
+          - "version-update:semver-major"
 
   - package-ecosystem: "github-actions"
     directory: "/"
