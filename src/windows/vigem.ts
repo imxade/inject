@@ -12,7 +12,7 @@ export interface XusbReport {
 	sThumbRY: number
 }
 
-const XUSB_REPORT = koffi.struct("InjectXUSB_REPORT", {
+const _XUSB_REPORT = koffi.struct("InjectXUSB_REPORT", {
 	wButtons: "uint16",
 	bLeftTrigger: "uint8",
 	bRightTrigger: "uint8",
@@ -83,7 +83,7 @@ export class ViGEmClient {
 		const result = this.addTarget(this.client, handle) as number
 		if (result !== VIGEM_ERROR_NONE) {
 			this.freeTarget(handle)
-			throw new Error(`vigem_target_add failed with code 0x${result.toString(16)}`)
+			throw new Error(\n\t\t\t\t`vigem_target_add failed with code 0x${result.toString(16)}`,\n\t\t\t)
 		}
 
 		const target = new ViGEmXbox360Target(
