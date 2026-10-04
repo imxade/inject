@@ -91,9 +91,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          for attempt in {1..12}; do
-            PUBLISHED="$(npm view "@imxade/inject@$VERSION" version 2>/dev/null || true)"
-            LATEST="$(npm view "@imxade/inject@latest" version 2>/dev/null || true)"
+          for attempt in {1..60}; do
+            PUBLISHED="$(npm view "@imxade/inject@$VERSION" version --prefer-online 2>/dev/null || true)"
+            LATEST="$(npm view "@imxade/inject@latest" version --prefer-online 2>/dev/null || true)"
 
             if [[ "$PUBLISHED" == "$VERSION" && "$LATEST" == "$VERSION" ]]; then
               echo "@imxade/inject@$VERSION is published and tagged latest."
