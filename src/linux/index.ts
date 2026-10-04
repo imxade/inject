@@ -434,6 +434,4 @@ export class LinuxInputInjector {
 
 		return this.touchDev.create("Virtual Touchpad")
 	}
-
-
 }
