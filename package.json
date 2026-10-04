@@ -1,6 +1,6 @@
 {
   "name": "@imxade/inject",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Low-level cross-platform native input injection primitives for Node.js",
   "type": "module",
   "main": "./dist/index.js",
@@ -34,7 +34,10 @@
     "check": "biome check src test vitest.config.ts",
     "check:fix": "biome check --write src test vitest.config.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run check && npm run typecheck && npm test",
+    "pack:check": "npm pack --dry-run"
   },
   "keywords": [
     "input",
@@ -58,5 +61,16 @@
     "@types/node": "22.10.2",
     "typescript": "7.0.2",
     "vitest": "3.2.7"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/imxade/inject.git"
+  },
+  "homepage": "https://github.com/imxade/inject#readme",
+  "bugs": {
+    "url": "https://github.com/imxade/inject/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

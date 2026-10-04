@@ -6,6 +6,56 @@ Its job is to expose the mechanisms required to create native input devices and
 submit native input events. It intentionally does **not** decide what those
 events mean for an application.
 
+## Install
+
+Install from GitHub now:
+
+```sh
+npm install github:imxade/inject
+```
+
+For a reproducible application dependency, pin a commit:
+
+```sh
+npm install github:imxade/inject#<commit-sha>
+```
+
+After the first npm registry release, the preferred install will be:
+
+```sh
+npm install @imxade/inject
+```
+
+GitHub installs run the package build automatically before installation, so
+consumers receive the compiled `dist/` entry points even though build output is
+not committed to the repository.
+
+## Quick usage
+
+Import the platform primitive you need and keep application input policy in the
+consumer:
+
+```ts
+import { EV_KEY, EV_SYN, UinputDevice } from "@imxade/inject/linux"
+
+const device = new UinputDevice({
+  name: "my-input-device",
+  identity: { bustype: 3, vendor: 1, product: 1, version: 1 },
+})
+
+device
+  .setEventBit(EV_KEY)
+  .setEventBit(EV_SYN)
+  .setKeyBit(myNativeKeyCode)
+  .create()
+
+device.emit(EV_KEY, myNativeKeyCode, myNativeKeyState).sync()
+```
+
+Use `@imxade/inject/mac` for CoreGraphics primitives and
+`@imxade/inject/windows` for SendInput, synthetic pointer, and ViGEm
+primitives.
+
 ## Design boundary
 
 The library owns:
