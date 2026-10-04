@@ -3,25 +3,31 @@ name: Publish to npm
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Existing release tag to publish (recovery only)"
+        required: true
+        type: string
 
 permissions:
   contents: read
   id-token: write
 
 concurrency:
-  group: npm-publish-${{ github.event.release.tag_name }}
+  group: npm-publish-${{ github.event.release.tag_name || inputs.tag_name }}
   cancel-in-progress: false
 
 jobs:
   publish:
-    if: github.event.release.prerelease == false
+    if: github.event_name == 'workflow_dispatch' || github.event.release.prerelease == false
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout released tag
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ github.event.release.tag_name || inputs.tag_name }}
           persist-credentials: false
 
       - name: Setup Node.js
@@ -38,7 +44,7 @@ jobs:
         id: version
         shell: bash
         env:
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag_name }}
         run: |
           set -euo pipefail
 
@@ -77,3 +83,26 @@ jobs:
       - name: Publish package
         if: steps.existing.outputs.published == 'false'
         run: npm publish --access public
+
+      - name: Verify registry release
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          for attempt in {1..12}; do
+            PUBLISHED="$(npm view "@imxade/inject@$VERSION" version 2>/dev/null || true)"
+            LATEST="$(npm view "@imxade/inject@latest" version 2>/dev/null || true)"
+
+            if [[ "$PUBLISHED" == "$VERSION" && "$LATEST" == "$VERSION" ]]; then
+              echo "@imxade/inject@$VERSION is published and tagged latest."
+              exit 0
+            fi
+
+            echo "Registry has version='${PUBLISHED:-missing}', latest='${LATEST:-missing}'; retrying..."
+            sleep 5
+          done
+
+          echo "npm registry did not converge to $VERSION."
+          exit 1

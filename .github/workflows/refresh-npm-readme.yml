@@ -1,0 +1,107 @@
+name: Refresh npm README
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - ".github/workflows/refresh-npm-readme.yml"
+
+permissions:
+  actions: write
+  contents: write
+
+concurrency:
+  group: refresh-npm-readme-0.1.1
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          package-manager-cache: false
+
+      - name: Validate patch version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p "require('./package.json').version")"
+          if [[ "$VERSION" != "0.1.1" ]]; then
+            echo "Expected package version 0.1.1, found $VERSION."
+            exit 1
+          fi
+
+      - name: Wait for required master checks
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          for workflow in ci.yml codeql.yml native-e2e.yml; do
+            success=false
+
+            for attempt in {1..90}; do
+              result="$(gh run list \
+                --workflow "$workflow" \
+                --commit "$GITHUB_SHA" \
+                --limit 1 \
+                --json status,conclusion \
+                --jq '.[0] | "\(.status) \(.conclusion)"')"
+
+              if [[ "$result" == "completed success" ]]; then
+                echo "$workflow passed for $GITHUB_SHA."
+                success=true
+                break
+              fi
+
+              if [[ "$result" == completed* && "$result" != "completed success" ]]; then
+                echo "$workflow failed for $GITHUB_SHA (status: $result)."
+                exit 1
+              fi
+
+              echo "Waiting for $workflow (status: ${result:-missing})..."
+              sleep 10
+            done
+
+            if [[ "$success" != "true" ]]; then
+              echo "Timed out waiting for $workflow."
+              exit 1
+            fi
+          done
+
+      - name: Create GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="v0.1.1"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "$TAG already exists."
+          else
+            gh release create "$TAG" \
+              --target "$GITHUB_SHA" \
+              --title "$TAG" \
+              --generate-notes
+          fi
+
+      - name: Dispatch trusted npm publisher
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run publish.yml \
+            --ref master \
+            -f tag_name=v0.1.1
