@@ -22,7 +22,9 @@ function waitForLine(
 		let output = ""
 		const timeout = setTimeout(() => {
 			cleanup()
-			reject(new Error(`Timed out waiting for observer line: ${line}\n${output}`))
+			reject(
+				new Error(`Timed out waiting for observer line: ${line}\n${output}`),
+			)
 		}, timeoutMs)
 
 		const onData = (chunk: Buffer | string) => {
@@ -44,11 +46,7 @@ function waitForLine(
 
 describe.runIf(enabled)("macOS CoreGraphics native E2E", () => {
 	it("delivers posted key events through a CGEventTap", async () => {
-		const observer = spawn("xcrun", [
-			"swift",
-			observerPath,
-			String(KEY_F13),
-		], {
+		const observer = spawn("xcrun", ["swift", observerPath, String(KEY_F13)], {
 			stdio: ["ignore", "pipe", "pipe"],
 		})
 

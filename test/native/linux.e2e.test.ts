@@ -21,7 +21,10 @@ interface NativeEvent {
 	value: number
 }
 
-async function waitForEventNode(name: string, timeoutMs = 5000): Promise<string> {
+async function waitForEventNode(
+	name: string,
+	timeoutMs = 5000,
+): Promise<string> {
 	const deadline = Date.now() + timeoutMs
 
 	while (Date.now() < deadline) {
@@ -48,10 +51,7 @@ async function readEvents(
 	expectedCount: number,
 	timeoutMs = 5000,
 ): Promise<NativeEvent[]> {
-	const handle = await open(
-		path,
-		fsConstants.O_RDONLY | fsConstants.O_NONBLOCK,
-	)
+	const handle = await open(path, fsConstants.O_RDONLY | fsConstants.O_NONBLOCK)
 	const events: NativeEvent[] = []
 	const buffer = Buffer.alloc(INPUT_EVENT_SIZE * 16)
 	const deadline = Date.now() + timeoutMs
@@ -112,11 +112,7 @@ describe.runIf(enabled)("Linux uinput native E2E", () => {
 		})
 
 		try {
-			device
-				.setEventBit(EV_KEY)
-				.setEventBit(EV_SYN)
-				.setKeyBit(KEY_F24)
-				.create()
+			device.setEventBit(EV_KEY).setEventBit(EV_SYN).setKeyBit(KEY_F24).create()
 
 			const eventPath = await waitForEventNode(name)
 			const eventsPromise = readEvents(eventPath, 4)

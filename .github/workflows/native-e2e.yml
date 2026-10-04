@@ -40,9 +40,8 @@ jobs:
         run: npm install --no-audit --no-fund
 
       - name: Run Linux native E2E
-        env:
-          INJECT_NATIVE_E2E: "1"
-        run: npm run test:e2e:linux
+        shell: bash
+        run: sudo env "PATH=$PATH" INJECT_NATIVE_E2E=1 npm run test:e2e:linux
 
   macos-coregraphics:
     if: github.event_name != 'pull_request' && vars.NATIVE_E2E_ENABLED == 'true'
