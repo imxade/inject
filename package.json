@@ -60,7 +60,7 @@
     "koffi": "2.16.3"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.15",
+    "@biomejs/biome": "2.6.2",
     "@types/node": "26.6.4",
     "typescript": "7.0.2",
     "vitest": "3.2.7"
