@@ -261,6 +261,10 @@ for pull requests, so untrusted fork code is not sent to persistent runners.
 Release creation requires CI, CodeQL, and Native E2E workflow runs to be green
 for the current `master` commit.
 
+## AI-assisted contribution disclosure
+
+The initial unified API implementation and parts of its documentation were prepared with AI assistance. Review and cross-platform testing are required before treating the API as production-validated. The native end-to-end tests should be run on Linux, macOS, and Windows; macOS and Windows require the configured self-hosted runners described above.
+
 ## Development
 
 ```sh
