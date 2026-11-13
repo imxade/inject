@@ -183,18 +183,36 @@ export async function createInjector(
 		case "win32": {
 			const native = await import("./windows/index.js")
 			const sendMouse = (flags: number, mouseData = 0, x = 0, y = 0) => {
-				const sent = native.sendInput([{
-					type: native.INPUT_MOUSE,
-					u: { mi: { dx: x, dy: y, mouseData, dwFlags: flags } },
-				}])
-				if (sent !== 1) throw new Error("SendInput failed to submit mouse event")
+				const sent = native.sendInput([
+					{
+						type: native.INPUT_MOUSE,
+						u: { mi: { dx: x, dy: y, mouseData, dwFlags: flags } },
+					},
+				])
+				if (sent !== 1) {
+					throw new Error("SendInput failed to submit mouse event")
+				}
 			}
 			const sendKey = (keyCode: number, down: boolean) => {
-				const sent = native.sendInput([{
-					type: native.INPUT_KEYBOARD,
-					u: { ki: { wVk: keyCode, wScan: 0, dwFlags: down ? 0 : native.KEYEVENTF_KEYUP } },
-				}])
-				if (sent !== 1) throw new Error("SendInput failed to submit keyboard event")
+				assertKeyCode(keyCode)
+				if (keyCode > 0xffff) {
+					throw new RangeError("Windows virtual key must be <= 65535")
+				}
+				const sent = native.sendInput([
+					{
+						type: native.INPUT_KEYBOARD,
+						u: {
+							ki: {
+								wVk: keyCode,
+								wScan: 0,
+								dwFlags: down ? 0 : native.KEYEVENTF_KEYUP,
+							},
+						},
+					},
+				])
+				if (sent !== 1) {
+					throw new Error("SendInput failed to submit keyboard event")
+				}
 			}
 			const buttons = {
 				left: [native.MOUSEEVENTF_LEFTDOWN, native.MOUSEEVENTF_LEFTUP],
@@ -206,36 +224,37 @@ export async function createInjector(
 					assertCoordinate(x, "x")
 					assertCoordinate(y, "y")
 					sendMouse(
-					native.MOUSEEVENTF_MOVE | native.MOUSEEVENTF_ABSOLUTE,
-					0,
-					x,
-					y,
-				)
+						native.MOUSEEVENTF_MOVE | native.MOUSEEVENTF_ABSOLUTE,
+						0,
+						x,
+						y,
+					)
 				},
 				injectMouseButton(button, down, x = 32767, y = 32767) {
 					assertCoordinate(x, "x")
 					assertCoordinate(y, "y")
 					const flags = buttons[button]
-					if (!flags) throw new Error(`Unsupported mouse button: ${button}`)
+					if (!flags) {
+						throw new Error(`Unsupported mouse button: ${button}`)
+					}
 					sendMouse(
-					native.MOUSEEVENTF_MOVE |
-						native.MOUSEEVENTF_ABSOLUTE |
-						flags[down ? 0 : 1],
-					0,
-					x,
-					y,
-				)
+						native.MOUSEEVENTF_MOVE |
+							native.MOUSEEVENTF_ABSOLUTE |
+							flags[down ? 0 : 1],
+						0,
+						x,
+						y,
+					)
 				},
 				injectMouseWheel(deltaY, deltaX = 0) {
-					if (deltaY !== 0)
-					sendMouse(native.MOUSEEVENTF_WHEEL, Math.trunc(deltaY * 120))
-					if (deltaX !== 0)
-					sendMouse(native.MOUSEEVENTF_HWHEEL, Math.trunc(deltaX * 120))
+					if (deltaY !== 0) {
+						sendMouse(native.MOUSEEVENTF_WHEEL, Math.trunc(deltaY * 120))
+					}
+					if (deltaX !== 0) {
+						sendMouse(native.MOUSEEVENTF_HWHEEL, Math.trunc(deltaX * 120))
+					}
 				},
 				injectKey(keyCode, down) {
-					assertKeyCode(keyCode)
-					if (keyCode > 0xffff)
-					throw new RangeError("Windows virtual key must be <= 65535")
 					sendKey(keyCode, down)
 				},
 				injectCombo(keyCodes) {
