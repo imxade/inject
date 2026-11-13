@@ -11,7 +11,7 @@ export interface UnifiedInjector {
 		x?: number,
 		y?: number,
 	): void
-	/** Wheel deltas use native wheel units; positive values scroll down/right. */
+	/** Wheel deltas use native wheel units; positive vertical values scroll up; positive horizontal values scroll right. */
 	injectMouseWheel(deltaY: number, deltaX?: number): void
 	/** keyCode is an OS-native code: evdev on Linux, CGKeyCode on macOS, VK on Windows. */
 	injectKey(keyCode: number, down: boolean): void
@@ -47,6 +47,7 @@ export async function createInjector(
 				.setEventBit(native.EV_KEY)
 				.setEventBit(native.EV_ABS)
 				.setEventBit(native.EV_REL)
+				.setPropertyBit(0)
 			for (let code = 0; code <= 0x2ff; code++) device.setKeyBit(code)
 			device
 				.setRelativeBit(6)
