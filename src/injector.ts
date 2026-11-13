@@ -70,7 +70,8 @@ export async function createInjector(
 					assertCoordinate(x, "x")
 					assertCoordinate(y, "y")
 					const code = { left: 0x110, right: 0x111, middle: 0x112 }[button]
-					if (code === undefined) throw new Error(`Unsupported mouse button: ${button}`)
+					if (code === undefined)
+\t\t\t\t\tthrow new Error(`Unsupported mouse button: ${button}`)
 					device
 						.emit(native.EV_ABS, 0, x)
 						.emit(native.EV_ABS, 1, y)
@@ -84,7 +85,8 @@ export async function createInjector(
 				},
 				injectKey(keyCode, down) {
 					assertKeyCode(keyCode)
-					if (keyCode > 0x2ff) throw new RangeError("Linux evdev keyCode must be <= 767")
+					if (keyCode > 0x2ff)
+\t\t\t\t\tthrow new RangeError("Linux evdev keyCode must be <= 767")
 					emit(native.EV_KEY, keyCode, down ? 1 : 0)
 				},
 				injectCombo(keyCodes) {
@@ -94,7 +96,8 @@ export async function createInjector(
 					}
 					for (const code of keyCodes) device.emit(native.EV_KEY, code, 1)
 					device.sync()
-					for (const code of [...keyCodes].reverse()) device.emit(native.EV_KEY, code, 0)
+					for (const code of [...keyCodes].reverse())
+\t\t\t\t\tdevice.emit(native.EV_KEY, code, 0)
 					device.sync()
 				},
 				destroy() {
@@ -133,26 +136,46 @@ export async function createInjector(
 			return {
 				injectMouseAbsolute(x, y) {
 					const p = point(x, y)
-					native.postMouseEvent(native.kCGHIDEventTap, native.kCGEventMouseMoved, p.x, p.y, native.kCGMouseButtonLeft)
+					native.postMouseEvent(
+\t\t\t\t\tnative.kCGHIDEventTap,
+\t\t\t\t\tnative.kCGEventMouseMoved,
+\t\t\t\t\tp.x,
+\t\t\t\t\tp.y,
+\t\t\t\t\tnative.kCGMouseButtonLeft,
+\t\t\t\t)
 				},
 				injectMouseButton(button, down, x = 32767, y = 32767) {
 					const data = buttonData[button]
 					if (!data) throw new Error(`Unsupported mouse button: ${button}`)
 					const p = point(x, y)
-					native.postMouseEvent(native.kCGHIDEventTap, down ? data.down : data.up, p.x, p.y, data.button)
+					native.postMouseEvent(
+\t\t\t\t\tnative.kCGHIDEventTap,
+\t\t\t\t\tdown ? data.down : data.up,
+\t\t\t\t\tp.x,
+\t\t\t\t\tp.y,
+\t\t\t\t\tdata.button,
+\t\t\t\t)
 				},
 				injectMouseWheel(deltaY, deltaX = 0) {
-					native.postScrollEvent(native.kCGHIDEventTap, native.kCGScrollEventUnitLine, deltaY, deltaX)
+					native.postScrollEvent(
+\t\t\t\t\tnative.kCGHIDEventTap,
+\t\t\t\t\tnative.kCGScrollEventUnitLine,
+\t\t\t\t\tdeltaY,
+\t\t\t\t\tdeltaX,
+\t\t\t\t)
 				},
 				injectKey(keyCode, down) {
 					assertKeyCode(keyCode)
-					if (keyCode > 0xffff) throw new RangeError("macOS CGKeyCode must be <= 65535")
+					if (keyCode > 0xffff)
+\t\t\t\t\tthrow new RangeError("macOS CGKeyCode must be <= 65535")
 					native.postKeyEvent(native.kCGHIDEventTap, keyCode, down)
 				},
 				injectCombo(keyCodes) {
 					for (const code of keyCodes) assertKeyCode(code)
-					for (const code of keyCodes) native.postKeyEvent(native.kCGHIDEventTap, code, true)
-					for (const code of [...keyCodes].reverse()) native.postKeyEvent(native.kCGHIDEventTap, code, false)
+					for (const code of keyCodes)
+\t\t\t\t\tnative.postKeyEvent(native.kCGHIDEventTap, code, true)
+					for (const code of [...keyCodes].reverse())
+\t\t\t\t\tnative.postKeyEvent(native.kCGHIDEventTap, code, false)
 				},
 				destroy() {},
 			}
@@ -182,22 +205,37 @@ export async function createInjector(
 				injectMouseAbsolute(x, y) {
 					assertCoordinate(x, "x")
 					assertCoordinate(y, "y")
-					sendMouse(native.MOUSEEVENTF_MOVE | native.MOUSEEVENTF_ABSOLUTE, 0, x, y)
+					sendMouse(
+\t\t\t\t\tnative.MOUSEEVENTF_MOVE | native.MOUSEEVENTF_ABSOLUTE,
+\t\t\t\t\t0,
+\t\t\t\t\tx,
+\t\t\t\t\ty,
+\t\t\t\t)
 				},
 				injectMouseButton(button, down, x = 32767, y = 32767) {
 					assertCoordinate(x, "x")
 					assertCoordinate(y, "y")
 					const flags = buttons[button]
 					if (!flags) throw new Error(`Unsupported mouse button: ${button}`)
-					sendMouse(native.MOUSEEVENTF_MOVE | native.MOUSEEVENTF_ABSOLUTE | flags[down ? 0 : 1], 0, x, y)
+					sendMouse(
+\t\t\t\t\tnative.MOUSEEVENTF_MOVE |
+\t\t\t\t\t\tnative.MOUSEEVENTF_ABSOLUTE |
+\t\t\t\t\t\tflags[down ? 0 : 1],
+\t\t\t\t\t0,
+\t\t\t\t\tx,
+\t\t\t\t\ty,
+\t\t\t\t)
 				},
 				injectMouseWheel(deltaY, deltaX = 0) {
-					if (deltaY !== 0) sendMouse(native.MOUSEEVENTF_WHEEL, Math.trunc(deltaY * 120))
-					if (deltaX !== 0) sendMouse(native.MOUSEEVENTF_HWHEEL, Math.trunc(deltaX * 120))
+					if (deltaY !== 0)
+\t\t\t\t\tsendMouse(native.MOUSEEVENTF_WHEEL, Math.trunc(deltaY * 120))
+					if (deltaX !== 0)
+\t\t\t\t\tsendMouse(native.MOUSEEVENTF_HWHEEL, Math.trunc(deltaX * 120))
 				},
 				injectKey(keyCode, down) {
 					assertKeyCode(keyCode)
-					if (keyCode > 0xffff) throw new RangeError("Windows virtual key must be <= 65535")
+					if (keyCode > 0xffff)
+\t\t\t\t\tthrow new RangeError("Windows virtual key must be <= 65535")
 					sendKey(keyCode, down)
 				},
 				injectCombo(keyCodes) {
