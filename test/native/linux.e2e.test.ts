@@ -1,7 +1,12 @@
 import { constants as fsConstants } from "node:fs"
 import { open, readdir, readFile } from "node:fs/promises"
 import { describe, expect, it } from "vitest"
-import { EV_KEY, EV_SYN, INPUT_EVENT_SIZE, SYN_REPORT } from "../../src/linux/index.js"
+import {
+	EV_KEY,
+	EV_SYN,
+	INPUT_EVENT_SIZE,
+	SYN_REPORT,
+} from "../../src/linux/index.js"
 import { createInjector } from "../../src/injector.js"
 
 const enabled =
