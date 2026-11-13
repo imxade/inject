@@ -2,7 +2,7 @@ import { spawn } from "node:child_process"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { describe, expect, it } from "vitest"
-import { kCGHIDEventTap, postKeyEvent } from "../../src/mac/index.js"
+import { createInjector } from "../../src/injector.js"
 
 const enabled =
 	process.env.INJECT_NATIVE_E2E === "1" && process.platform === "darwin"
@@ -59,8 +59,13 @@ describe.runIf(enabled)("macOS CoreGraphics native E2E", () => {
 			await waitForLine(observer.stdout, "READY", 30_000)
 
 			const pass = waitForLine(observer.stdout, "PASS", 5000)
-			postKeyEvent(kCGHIDEventTap, KEY_F13, true)
-			postKeyEvent(kCGHIDEventTap, KEY_F13, false)
+			const input = await createInjector("darwin")
+			try {
+				input.injectKey(KEY_F13, true)
+				input.injectKey(KEY_F13, false)
+			} finally {
+				input.destroy()
+			}
 			await pass
 
 			const exitCode = await new Promise<number | null>((resolve) => {
