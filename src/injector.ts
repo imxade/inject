@@ -11,9 +11,9 @@ export interface UnifiedInjector {
 		x?: number,
 		y?: number,
 	): void
-	/** Wheel deltas use native wheel units; positive vertical values scroll up; positive horizontal values scroll right. */
+	/** Positive vertical deltas scroll up; positive horizontal deltas scroll right. */
 	injectMouseWheel(deltaY: number, deltaX?: number): void
-	/** keyCode is an OS-native code: evdev on Linux, CGKeyCode on macOS, VK on Windows. */
+	/** keyCode is OS-native: evdev on Linux, CGKeyCode on macOS, VK on Windows. */
 	injectKey(keyCode: number, down: boolean): void
 	/** Press codes in order, then release them in reverse order. */
 	injectCombo(keyCodes: number[]): void
@@ -29,6 +29,12 @@ function assertCoordinate(value: number, name: string): void {
 function assertKeyCode(value: number): void {
 	if (!Number.isInteger(value) || value < 0) {
 		throw new RangeError("keyCode must be a non-negative integer")
+	}
+}
+
+function assertWheelDelta(value: number): void {
+	if (!Number.isFinite(value)) {
+		throw new RangeError("Wheel deltas must be finite numbers")
 	}
 }
 
@@ -48,7 +54,9 @@ export async function createInjector(
 				.setEventBit(native.EV_ABS)
 				.setEventBit(native.EV_REL)
 				.setPropertyBit(0)
-			for (let code = 0; code <= 0x2ff; code++) device.setKeyBit(code)
+			for (let code = 0; code <= 0x2ff; code++) {
+				device.setKeyBit(code)
+			}
 			device
 				.setRelativeBit(6)
 				.setRelativeBit(8)
@@ -58,8 +66,9 @@ export async function createInjector(
 				.configureAbsoluteAxis(1, { minimum: 0, maximum: 65535 })
 				.create()
 
-			const emit = (type: number, code: number, value: number) =>
+			const emit = (type: number, code: number, value: number) => {
 				device.emit(type, code, value).sync()
+			}
 			return {
 				injectMouseAbsolute(x, y) {
 					assertCoordinate(x, "x")
@@ -70,8 +79,9 @@ export async function createInjector(
 					assertCoordinate(x, "x")
 					assertCoordinate(y, "y")
 					const code = { left: 0x110, right: 0x111, middle: 0x112 }[button]
-					if (code === undefined)
-					throw new Error(`Unsupported mouse button: ${button}`)
+					if (code === undefined) {
+						throw new Error(`Unsupported mouse button: ${button}`)
+					}
 					device
 						.emit(native.EV_ABS, 0, x)
 						.emit(native.EV_ABS, 1, y)
@@ -79,25 +89,37 @@ export async function createInjector(
 						.sync()
 				},
 				injectMouseWheel(deltaY, deltaX = 0) {
-					if (deltaY !== 0) device.emit(native.EV_REL, 8, Math.trunc(deltaY))
-					if (deltaX !== 0) device.emit(native.EV_REL, 6, Math.trunc(deltaX))
+					assertWheelDelta(deltaY)
+					assertWheelDelta(deltaX)
+					if (deltaY !== 0) {
+						device.emit(native.EV_REL, 8, Math.trunc(deltaY))
+					}
+					if (deltaX !== 0) {
+						device.emit(native.EV_REL, 6, Math.trunc(deltaX))
+					}
 					device.sync()
 				},
 				injectKey(keyCode, down) {
 					assertKeyCode(keyCode)
-					if (keyCode > 0x2ff)
-					throw new RangeError("Linux evdev keyCode must be <= 767")
+					if (keyCode > 0x2ff) {
+						throw new RangeError("Linux evdev keyCode must be <= 767")
+					}
 					emit(native.EV_KEY, keyCode, down ? 1 : 0)
 				},
 				injectCombo(keyCodes) {
-					for (const code of keyCodes) assertKeyCode(code)
-					if (keyCodes.some((code) => code > 0x2ff)) {
-						throw new RangeError("Linux evdev keyCode must be <= 767")
+					for (const code of keyCodes) {
+						assertKeyCode(code)
+						if (code > 0x2ff) {
+							throw new RangeError("Linux evdev keyCode must be <= 767")
+						}
 					}
-					for (const code of keyCodes) device.emit(native.EV_KEY, code, 1)
+					for (const code of keyCodes) {
+						device.emit(native.EV_KEY, code, 1)
+					}
 					device.sync()
-					for (const code of [...keyCodes].reverse())
-					device.emit(native.EV_KEY, code, 0)
+					for (const code of [...keyCodes].reverse()) {
+						device.emit(native.EV_KEY, code, 0)
+					}
 					device.sync()
 				},
 				destroy() {
@@ -133,49 +155,61 @@ export async function createInjector(
 					up: native.kCGEventOtherMouseUp,
 				},
 			}
+			const sendKey = (keyCode: number, down: boolean) => {
+				assertKeyCode(keyCode)
+				if (keyCode > 0xffff) {
+					throw new RangeError("macOS CGKeyCode must be <= 65535")
+				}
+				native.postKeyEvent(native.kCGHIDEventTap, keyCode, down)
+			}
 			return {
 				injectMouseAbsolute(x, y) {
 					const p = point(x, y)
 					native.postMouseEvent(
-					native.kCGHIDEventTap,
-					native.kCGEventMouseMoved,
-					p.x,
-					p.y,
-					native.kCGMouseButtonLeft,
-				)
+						native.kCGHIDEventTap,
+						native.kCGEventMouseMoved,
+						p.x,
+						p.y,
+						native.kCGMouseButtonLeft,
+					)
 				},
 				injectMouseButton(button, down, x = 32767, y = 32767) {
 					const data = buttonData[button]
-					if (!data) throw new Error(`Unsupported mouse button: ${button}`)
+					if (!data) {
+						throw new Error(`Unsupported mouse button: ${button}`)
+					}
 					const p = point(x, y)
 					native.postMouseEvent(
-					native.kCGHIDEventTap,
-					down ? data.down : data.up,
-					p.x,
-					p.y,
-					data.button,
-				)
+						native.kCGHIDEventTap,
+						down ? data.down : data.up,
+						p.x,
+						p.y,
+						data.button,
+					)
 				},
 				injectMouseWheel(deltaY, deltaX = 0) {
+					assertWheelDelta(deltaY)
+					assertWheelDelta(deltaX)
 					native.postScrollEvent(
-					native.kCGHIDEventTap,
-					native.kCGScrollEventUnitLine,
-					deltaY,
-					deltaX,
-				)
+						native.kCGHIDEventTap,
+						native.kCGScrollEventUnitLine,
+						deltaY,
+						deltaX,
+					)
 				},
 				injectKey(keyCode, down) {
-					assertKeyCode(keyCode)
-					if (keyCode > 0xffff)
-					throw new RangeError("macOS CGKeyCode must be <= 65535")
-					native.postKeyEvent(native.kCGHIDEventTap, keyCode, down)
+					sendKey(keyCode, down)
 				},
 				injectCombo(keyCodes) {
-					for (const code of keyCodes) assertKeyCode(code)
-					for (const code of keyCodes)
-					native.postKeyEvent(native.kCGHIDEventTap, code, true)
-					for (const code of [...keyCodes].reverse())
-					native.postKeyEvent(native.kCGHIDEventTap, code, false)
+					for (const code of keyCodes) {
+						assertKeyCode(code)
+					}
+					for (const code of keyCodes) {
+						sendKey(code, true)
+					}
+					for (const code of [...keyCodes].reverse()) {
+						sendKey(code, false)
+					}
 				},
 				destroy() {},
 			}
@@ -247,6 +281,8 @@ export async function createInjector(
 					)
 				},
 				injectMouseWheel(deltaY, deltaX = 0) {
+					assertWheelDelta(deltaY)
+					assertWheelDelta(deltaX)
 					if (deltaY !== 0) {
 						sendMouse(native.MOUSEEVENTF_WHEEL, Math.trunc(deltaY * 120))
 					}
@@ -258,9 +294,15 @@ export async function createInjector(
 					sendKey(keyCode, down)
 				},
 				injectCombo(keyCodes) {
-					for (const code of keyCodes) assertKeyCode(code)
-					for (const code of keyCodes) sendKey(code, true)
-					for (const code of [...keyCodes].reverse()) sendKey(code, false)
+					for (const code of keyCodes) {
+						assertKeyCode(code)
+					}
+					for (const code of keyCodes) {
+						sendKey(code, true)
+					}
+					for (const code of [...keyCodes].reverse()) {
+						sendKey(code, false)
+					}
 				},
 				destroy() {},
 			}
