@@ -20,20 +20,12 @@ can install it directly from the public npm registry.
 Use the root API for common mouse and keyboard injection:
 
 ```ts
-import { EV_KEY, EV_SYN, UinputDevice } from "@imxade/inject/linux"
+import { createInjector } from "@imxade/inject"
 
-const device = new UinputDevice({
-  name: "my-input-device",
-  identity: { bustype: 3, vendor: 1, product: 1, version: 1 },
-})
-
-device
-  .setEventBit(EV_KEY)
-  .setEventBit(EV_SYN)
-  .setKeyBit(myNativeKeyCode)
-  .create()
-
-device.emit(EV_KEY, myNativeKeyCode, myNativeKeyState).sync()
+const input = await createInjector()
+input.injectKey(nativeKeyCode, true)
+input.injectKey(nativeKeyCode, false)
+input.destroy()
 ```
 
 Use `@imxade/inject/mac` for CoreGraphics primitives and
@@ -60,7 +52,8 @@ input.destroy()
 The unified API currently covers absolute pointer positioning, primary mouse
 buttons, vertical/horizontal wheel events, key down/up, and key combinations.
 Coordinates are normalized to the inclusive range `0..65535`. Wheel deltas are
-expressed in line-like native units (Windows converts each unit to 120 wheel
+expressed in line-like native units (positive vertical values scroll up and
+positive horizontal values scroll right; Windows converts each unit to 120 wheel
 delta units).
 
 **Key codes remain OS-native:** Linux expects evdev codes, macOS expects
@@ -105,7 +98,7 @@ The unified API standardizes operation names and argument shapes, not OS-native 
 
 ```text
 src/
-├── index.ts       # platform-neutral loader/types only
+├── index.ts       # platform-neutral loader and unified API exports
 ├── loader.ts      # lazy platform loading
 ├── linux/         # generic uinput device/config/event primitives
 ├── mac/           # CoreGraphics event-posting primitives
