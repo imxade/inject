@@ -87,7 +87,6 @@ export function postScrollEvent(
 	postAndRelease(tapLocation, event)
 }
 
-
 let mainDisplayId: KoffiFunc | null = null
 let displayPixelsWide: KoffiFunc | null = null
 let displayPixelsHigh: KoffiFunc | null = null
