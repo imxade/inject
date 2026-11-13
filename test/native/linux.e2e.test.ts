@@ -1,13 +1,8 @@
 import { constants as fsConstants } from "node:fs"
 import { open, readdir, readFile } from "node:fs/promises"
 import { describe, expect, it } from "vitest"
-import {
-	EV_KEY,
-	EV_SYN,
-	INPUT_EVENT_SIZE,
-	SYN_REPORT,
-	UinputDevice,
-} from "../../src/linux/index.js"
+import { EV_KEY, EV_SYN, INPUT_EVENT_SIZE, SYN_REPORT } from "../../src/linux/index.js"
+import { createInjector } from "../../src/injector.js"
 
 const enabled =
 	process.env.INJECT_NATIVE_E2E === "1" && process.platform === "linux"
@@ -95,20 +90,10 @@ async function readEvents(
 
 describe.runIf(enabled)("Linux uinput native E2E", () => {
 	it("delivers the exact emitted key frames through evdev", async () => {
-		const name = `inject-e2e-${process.pid}-${Date.now()}`
-		const device = new UinputDevice({
-			name,
-			identity: {
-				bustype: BUS_USB,
-				vendor: 0x1209,
-				product: 0x0001,
-				version: 1,
-			},
-		})
+		const name = "inject-unified-input"
+		const input = await createInjector("linux")
 
 		try {
-			device.setEventBit(EV_KEY).setEventBit(EV_SYN).setKeyBit(KEY_F24).create()
-
 			const eventPath = await waitForEventNode(name)
 			const eventHandle = await open(
 				eventPath,
@@ -118,8 +103,8 @@ describe.runIf(enabled)("Linux uinput native E2E", () => {
 			try {
 				const eventsPromise = readEvents(eventHandle, 4)
 
-				device.emit(EV_KEY, KEY_F24, 1).sync()
-				device.emit(EV_KEY, KEY_F24, 0).sync()
+				input.injectKey(KEY_F24, true)
+				input.injectKey(KEY_F24, false)
 
 				await expect(eventsPromise).resolves.toEqual([
 					{ type: EV_KEY, code: KEY_F24, value: 1 },
@@ -131,7 +116,7 @@ describe.runIf(enabled)("Linux uinput native E2E", () => {
 				await eventHandle.close()
 			}
 		} finally {
-			device.destroy()
+			input.destroy()
 		}
 	}, 15_000)
 })
