@@ -87,7 +87,7 @@ async function readEvents(
 	return events.slice(0, expectedCount)
 }
 
-describe.runIf(enabled)("Linux uinput native E2E", () => {
+describe.runIf(enabled)("Linux unified input native E2E", () => {
 	it("delivers the exact emitted key frames through evdev", async () => {
 		const name = "inject-unified-input"
 		const input = await createInjector("linux")
