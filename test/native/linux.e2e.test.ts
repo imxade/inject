@@ -8,7 +8,6 @@ const enabled =
 	process.env.INJECT_NATIVE_E2E === "1" && process.platform === "linux"
 
 const KEY_F24 = 194
-const BUS_USB = 0x03
 
 interface NativeEvent {
 	type: number
