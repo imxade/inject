@@ -1,10 +1,8 @@
 # Inject
 
-Inject is a thin native-input systems layer for Node.js.
+Inject provides native input primitives and a unified cross-platform input API for Node.js.
 
-Its job is to expose the mechanisms required to create native input devices and
-submit native input events. It intentionally does **not** decide what those
-events mean for an application.
+Use the root `createInjector()` API for common mouse and keyboard operations, or import a platform subpath when you need lower-level operating-system features.
 
 ## Install
 
@@ -19,8 +17,7 @@ can install it directly from the public npm registry.
 
 ## Quick usage
 
-Import the platform primitive you need and keep application input policy in the
-consumer:
+Use the root API for common mouse and keyboard injection:
 
 ```ts
 import { EV_KEY, EV_SYN, UinputDevice } from "@imxade/inject/linux"
@@ -42,6 +39,37 @@ device.emit(EV_KEY, myNativeKeyCode, myNativeKeyState).sync()
 Use `@imxade/inject/mac` for CoreGraphics primitives and
 `@imxade/inject/windows` for SendInput, synthetic pointer, and ViGEm
 primitives.
+
+## Unified API
+
+```ts
+import { createInjector } from "@imxade/inject"
+
+const input = await createInjector()
+
+input.injectMouseAbsolute(32767, 32767)
+input.injectMouseButton("left", true, 32767, 32767)
+input.injectMouseButton("left", false, 32767, 32767)
+input.injectKey(nativeKeyCode, true)
+input.injectKey(nativeKeyCode, false)
+input.injectCombo([modifierKeyCode, keyCode])
+input.injectMouseWheel(1, 0)
+input.destroy()
+```
+
+The unified API currently covers absolute pointer positioning, primary mouse
+buttons, vertical/horizontal wheel events, key down/up, and key combinations.
+Coordinates are normalized to the inclusive range `0..65535`. Wheel deltas are
+expressed in line-like native units (Windows converts each unit to 120 wheel
+delta units).
+
+**Key codes remain OS-native:** Linux expects evdev codes, macOS expects
+`CGKeyCode`, and Windows expects virtual-key codes. This intentionally avoids
+pretending that physical keys and keyboard layouts have identical numeric
+representations across operating systems. Text entry, layout translation,
+touch interpretation, gestures, and controller mappings remain application
+responsibilities. Linux creates a virtual uinput device and therefore requires
+access to `/dev/uinput`; macOS may require the appropriate privacy permission.
 
 ## Design boundary
 
@@ -71,9 +99,7 @@ The consuming application owns:
 There are no built-in key maps, gesture policies, controller layouts, screen
 defaults, or input-message formats.
 
-The model is deliberately closer to Node.js core bindings: Inject exposes a
-small, predictable primitive over an operating-system facility, while the
-caller decides how to compose those primitives.
+The unified API standardizes operation names and argument shapes, not OS-native key-code spaces or application policy. Platform subpaths remain available for capabilities not yet represented by the common interface.
 
 ## API layout
 
@@ -195,16 +221,14 @@ vigem.destroy()
 
 No button-name map or bundled binary lookup is provided by the library.
 
-## What should not be added here
+## Scope boundaries
 
-Features such as `injectText("hello")`, `injectCombo(["ctrl", "c"])`, a
-predefined `"left"` mouse action, gesture-to-scroll conversion, pointer
-acceleration, or an application-specific input message schema should live in a
-consumer package or application.
-
-A useful test for a contribution is: **does this expose a native input mechanism,
-or does it decide how an application should interpret input?** Only the former
-belongs here.
+The common API deliberately does not guess keyboard layouts or translate text
+into keystrokes. Applications remain responsible for text-to-key conversion,
+key-name maps, pointer acceleration, gesture recognition, touch interpretation,
+controller layouts, protocols, validation, and throttling. New cross-platform
+operations should be added only when their behavior and limitations can be
+specified consistently on every supported operating system.
 
 ## Releases
 
