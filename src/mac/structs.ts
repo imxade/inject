@@ -35,6 +35,9 @@ function ensureFunctions(): void {
 	)
 	eventPost = library.func("void CGEventPost(uint32, void *)")
 	release = library.func("void CFRelease(void *)")
+	mainDisplayId = library.func("uint32 CGMainDisplayID(void)")
+	displayPixelsWide = library.func("size_t CGDisplayPixelsWide(uint32)")
+	displayPixelsHigh = library.func("size_t CGDisplayPixelsHigh(uint32)")
 }
 
 function postAndRelease(tapLocation: number, event: unknown): void {
@@ -82,4 +85,21 @@ export function postScrollEvent(
 		Math.round(deltaAxis2),
 	)
 	postAndRelease(tapLocation, event)
+}
+
+
+let mainDisplayId: KoffiFunc | null = null
+let displayPixelsWide: KoffiFunc | null = null
+let displayPixelsHigh: KoffiFunc | null = null
+
+export function getMainDisplaySize(): { width: number; height: number } {
+	ensureFunctions()
+	if (!mainDisplayId || !displayPixelsWide || !displayPixelsHigh) {
+		throw new Error("CoreGraphics display metrics are unavailable")
+	}
+	const display = mainDisplayId() as number
+	return {
+		width: displayPixelsWide(display) as number,
+		height: displayPixelsHigh(display) as number,
+	}
 }
