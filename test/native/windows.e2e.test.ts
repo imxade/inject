@@ -1,5 +1,5 @@
 import koffi from "koffi"
-import { describe, expect, it } from "vitest"
+import { describe, it } from "vitest"
 import { createInjector } from "../../src/injector.js"
 
 const enabled =
@@ -21,7 +21,7 @@ async function waitForState(
 	throw new Error(`Timed out waiting for F24 state down=${down}`)
 }
 
-describe.runIf(enabled)("Windows SendInput native E2E", () => {
+describe.runIf(enabled)("Windows unified input native E2E", () => {
 	it("changes the operating-system keyboard state", async () => {
 		const user32 = koffi.load("user32.dll")
 		const getAsyncKeyState = user32.func(
