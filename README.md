@@ -4,6 +4,14 @@ Inject provides native input primitives and a unified cross-platform input API f
 
 Use the root `createInjector()` API for common mouse and keyboard operations, or import a platform subpath when you need lower-level operating-system features.
 
+## Platform support
+
+**Windows and Linux are the first-party supported and prioritised platforms.** These are the platforms the maintainers primarily use and have access to for routine development, testing, and validation.
+
+**macOS support is experimental and best-effort, and is not currently a first-party priority.** Some functionality may work, but testing and maintenance may be less comprehensive, and macOS-specific issues may take longer to address. macOS support should not be assumed to have the same support commitment as Windows and Linux.
+
+Funding or sponsorship dedicated to macOS support is welcome. It can help provide the hardware, testing capacity, and maintenance time needed to improve and sustain macOS support.
+
 ## Install
 
 Install from npm:
